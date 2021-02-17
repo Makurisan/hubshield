@@ -212,6 +212,7 @@ static u16 variant = 0;
 			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 2);
 			pr_hex(vhub->transfer, 12);
 
+			u8 idex;
 			for (idx = 0; idx < 5; ++idx)
 			{
 				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
