@@ -209,7 +209,7 @@ static u16 variant = 0;
 			// 		_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
 			// 		pr_hex(vhub->transfer, 16);
 			// 	}
-			// }
+			// } 
 			UDCDBG(vhub, "Header");
 			_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 3);
 			pr_hex(vhub->transfer, 3);
