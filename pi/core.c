@@ -171,7 +171,7 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 #define WRITE_CMD 0x2a
 
 static u16 variant = 0;
-
+ 
 		memset(vhub->transfer, 0, 512);
 		// spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
@@ -183,9 +183,10 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 16);	
 		} else {
 			++variant;
-			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c|", 13);
-			spi_buf_rd(vhub, MASTER_TX_CMD, vhub->transfer, 12);
-			pr_hex(vhub->transfer, 16);	
+			memmove(vhub->transfer, "|\x02\x03|", 4);
+			//spi_buf_rd(vhub, MASTER_TX_CMD, vhub->transfer, 12);
+			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
+			pr_hex(vhub->transfer, 16);
 		}
 
 		mutex_unlock(&vhub->spi_bus_mutex);
