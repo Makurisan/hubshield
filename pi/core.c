@@ -193,24 +193,6 @@ static u16 variant = 0;
 		// 	UDCDBG(vhub, "->");
 		// 	pr_hex(vhub->transfer, 16);
 		// } else {
-<<<<<<< HEAD
-		// 	u8 idx;
-		// 	for (idx = 0; idx < 5; ++idx)
-		// 	{
-		// 		_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-		// 		pr_hex(vhub->transfer, 16);
-		// 	}
-		// }
-		UDCDBG(vhub, "Header");
-		_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 3);
-		pr_hex(vhub->transfer, 3);		
-		// for (idx = 0; idx < 5; ++idx)
-		// {
-		// 	_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-		// 	pr_hex(vhub->transfer, 16);
-		// }
-
-=======
 			// if (variant == 0) {
 			// 	int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
 			// 	if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
@@ -234,7 +216,6 @@ static u16 variant = 0;
 			// 	pr_hex(vhub->transfer, 16);
 			// }
 		// }
->>>>>>> a1896e15cc4cd3b07ada6e2ed1dfcaeb1f403b4b
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
