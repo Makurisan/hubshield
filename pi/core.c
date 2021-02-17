@@ -210,13 +210,14 @@ static u16 variant = 0;
 			UDCDBG(vhub, "Header");
 
 			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 2);
-			pr_hex(vhub->transfer, 12);
+			pr_hex(vhub->transfer, 2);
 
 			u8 idx;
-			for (idx = 0; idx < 5; ++idx)
+			UDCDBG(vhub, "Daten");
+			for (idx = 0; idx < 4; ++idx)
 			{
 				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
-				pr_hex(vhub->transfer, 12);
+				pr_hex(vhub->transfer, 5);
 			}
 				// for (idx = 0; idx < 5; ++idx)
 				// {
