@@ -191,8 +191,9 @@ static u16 variant = 0;
 #else
 		if (variant == 0) {
 			int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-			if (ret != 0)
+			if (ret != 0) 
 				variant++;
+			UDCDBG(vhub, "->");
 			pr_hex(vhub->transfer, 16);
 		} else {
 			_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
