@@ -189,8 +189,15 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 16);
 		}
 #else
-		_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-		pr_hex(vhub->transfer, 16);
+		if (variant == 0) {
+			int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
+			if (ret != 0)
+				variant++;
+			pr_hex(vhub->transfer, 16);
+		} else {
+			_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
+			pr_hex(vhub->transfer, 16);
+		}
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
@@ -286,7 +293,7 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 	memset(t, 0, sizeof(t));
 
 	command[0] = reg;
-	command[1] = 0;
+	command[1] = crc8(vbus_crc_table, buffer, length, 0);
 	t[0].tx_buf = command;
 	t[0].len = 2;
 	spi_message_add_tail(&t[0], &m);
@@ -297,6 +304,7 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 
 	spi_sync(spi, &m);
 
+	return command[1];
 }
 
 static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
