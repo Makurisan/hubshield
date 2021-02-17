@@ -34,6 +34,8 @@
 
 #include "vhub.h"
 
+DECLARE_CRC8_TABLE(vbus_crc_table);
+
 static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val);
 
 static int spi_re(struct ast_vhub *vhub, unsigned int reg,
@@ -378,6 +380,9 @@ static int ast_vhub_probe(struct spi_device *spi)
 		dev_err(&spi->dev, "Unable to allocate Hub transfer buffer.\n");
 		return -ENOMEM;
 	}
+
+	// init crc8
+	crc8_populate_msb(vbus_crc_table, 0x7);
 
 	vhub->spi = spi;
 	spi_set_drvdata(spi, vhub);
