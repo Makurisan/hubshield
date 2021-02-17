@@ -213,7 +213,7 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 2);
 
 			u8 idx;
-			pr_hex("Raw-Daten: \x7c\x01\x02\x03\x04\x05\x06\x07\x08\x7c ", 22);
+			UDCDBG(vhub, "Data");
 			for (idx = 0; idx < 4; ++idx)
 			{
 				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
