@@ -159,8 +159,11 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 		mutex_lock(&vhub->spi_bus_mutex);
 
-#define MASTER_RX_CMD 0x1a
-#define MASTER_TX_CMD 0x2a
+
+
+
+#define MASTER_TX_CMD 0x2a // master transmit with READ/WRITE
+#define MASTER_RX_CMD 0x1a // master want to receive someting
 
 #define SLAVE_RX_CMD 0x3a
 #define SLAVE_TX_CMD 0x4a
@@ -176,12 +179,12 @@ static u16 variant = 0;
 
 		if(variant != 0) {
 			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09|", 10);
-			spi_buf_rd(vhub, SLAVE_RX_CMD, vhub->transfer, 12);
+			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 12);
 			pr_hex(vhub->transfer, 16);	
 		} else {
 			++variant;
 			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c|", 13);
-			spi_buf_rd(vhub, SLAVE_RX_CMD, vhub->transfer, 12);
+			spi_buf_rd(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			pr_hex(vhub->transfer, 16);	
 		}
 
@@ -282,6 +285,11 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 	t[0].tx_buf = command;
 	t[0].len = 2;
 	spi_message_add_tail(&t[0], &m);
+
+	// overlapped copy is allowed
+	memmove(&vhub->transfer[2], buffer, length);
+	vhub->transfer[0] = reg;
+	vhub->transfer[1] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
 
 	t[1].rx_buf = buffer;
 	t[1].len = length;
