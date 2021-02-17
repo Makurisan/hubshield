@@ -159,9 +159,6 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 		mutex_lock(&vhub->spi_bus_mutex);
 
-
-
-
 #define MASTER_TX_CMD 0x2a // master transmit with READ/WRITE
 #define MASTER_RX_CMD 0x1a // master want to receive someting
 
@@ -218,7 +215,7 @@ static u16 variant = 0;
 			// 	_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
 			// 	pr_hex(vhub->transfer, 16);
 			// }
-		}
+		// }
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
