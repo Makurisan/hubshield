@@ -196,7 +196,8 @@ static u16 variant = 0;
 			UDCDBG(vhub, "->");
 			pr_hex(vhub->transfer, 16);
 		} else {
-			for (u8 idx = 0; idx < 5; ++idx)
+			u8 idx;
+			for (idx = 0; idx < 5; ++idx)
 			{
 				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
 				pr_hex(vhub->transfer, 16);
