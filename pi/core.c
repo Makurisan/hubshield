@@ -213,18 +213,12 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 2);
 
 			u8 idx;
-			UDCDBG(vhub, "Daten: \x7c\x01\x02\x03\x04\x05\x06\x07\x08\x7c ");
+			pr_hex("Raw-Daten: \x7c\x01\x02\x03\x04\x05\x06\x07\x08\x7c ", 22);
 			for (idx = 0; idx < 4; ++idx)
 			{
 				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
 				pr_hex(vhub->transfer, 5);
 			}
-				// for (idx = 0; idx < 5; ++idx)
-				// {
-				// 	_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-				// 	pr_hex(vhub->transfer, 16);
-				// }
-				// }
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
