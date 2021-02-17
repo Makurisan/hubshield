@@ -1,0 +1,51 @@
+/*
+ * Universal device tree overlay for SPI devices
+ */
+
+/dts-v1/;
+/plugin/;
+
+/*
+#include <include/dt-bindings/interrupt-controller/irq.h>
+ */
+
+/ {
+	compatible = "brcm,bcm2711";
+
+	fragment@0 {
+		target = <&spidev0>;
+		__overlay__ {
+			status = "disabled";
+		};
+	};
+
+	fragment@1 {
+		target = <&spi0>;
+        __overlay__ {
+			/* needed to avoid dtc warning */
+    		#address-cells = <1>;
+			#size-cells = <0>;
+ 			status = "okay";
+            vhub: vhub@48 {
+				compatible = "hubshield,v-hub";
+				reg = <0x0>;
+				interrupt-parent = <&gpio>;
+				interrupts = <5 2>; /* IRQ_TYPE_EDGE_FALLING */
+                reset-gpios = <&gpio 25 1>; // GPIO_ACTIVE_HIGH
+				max-ports = <5>; // count of virtual hub ports
+				endpoints = <15>; // count of hub generic endpoints
+				gpio-controller;
+				#gpio-cells = <2>;
+				spi-max-frequency = <10000000>;
+			};
+		};
+	};
+
+	__overrides__ {
+		ports = <&vhub>,"max-ports:0";
+		spi_irq = <&vhub>,"interrupts:0";
+        spi_cs =  <&vhub>,"reg:0";
+		speed =  <&vhub>,"spi-max-frequency:0";
+    };
+
+};
