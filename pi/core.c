@@ -286,11 +286,6 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 	t[0].len = 2;
 	spi_message_add_tail(&t[0], &m);
 
-	// overlapped copy is allowed
-	memmove(&vhub->transfer[2], buffer, length);
-	vhub->transfer[0] = reg;
-	vhub->transfer[1] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
-
 	t[1].rx_buf = buffer;
 	t[1].len = length;
 	spi_message_add_tail(&t[1], &m);
@@ -309,16 +304,17 @@ static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *buffer, size_t lengt
 
 	spi_message_init(&msg);
 
-	memmove(&vhub->transfer[2], buffer, length);
+	memmove(&vhub->transfer[3], buffer, length);
 
 	static u8 value = 0;
 
 	// our header reg and length field
 	vhub->transfer[0] = reg;
 	vhub->transfer[1] = length;
+	vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
 
 	transfer.tx_buf = vhub->transfer;
-	transfer.len = 2 + length;
+	transfer.len = 3 + length;
 
 	spi_message_add_tail(&transfer, &msg);
 	spi_sync(spi, &msg);
