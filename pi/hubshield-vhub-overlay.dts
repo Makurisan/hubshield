@@ -36,7 +36,7 @@
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <2>;
-				spi-max-frequency = <10000000>;
+				spi-max-frequency = <1000000>;
 			};
 		};
 	};
