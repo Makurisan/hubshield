@@ -208,14 +208,21 @@ static u16 variant = 0;
 			// 	}
 			// } 
 			UDCDBG(vhub, "Header");
-			_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 12);
+
+			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 2);
 			pr_hex(vhub->transfer, 12);
-			// for (idx = 0; idx < 5; ++idx)
-			// {
-			// 	_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-			// 	pr_hex(vhub->transfer, 16);
-			// }
-		// }
+
+			for (idx = 0; idx < 5; ++idx)
+			{
+				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
+				pr_hex(vhub->transfer, 12);
+			}
+				// for (idx = 0; idx < 5; ++idx)
+				// {
+				// 	_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
+				// 	pr_hex(vhub->transfer, 16);
+				// }
+				// }
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
