@@ -30,6 +30,7 @@
 #include <linux/of_irq.h>
 #include <linux/regmap.h>
 #include <linux/dma-mapping.h>
+#include <linux/crc8.h>
 
 #include "vhub.h"
 
@@ -163,7 +164,6 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 #define SLAVE_TX_CMD 0x4a
 
 #define WRITE_CMD 0x2a
-
 
 static u16 variant = 0;
 
