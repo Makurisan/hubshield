@@ -189,13 +189,13 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 16);
 		}
 #else
-		if (variant == 0) {
-			int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-			if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
-				variant++;
-			UDCDBG(vhub, "->");
-			pr_hex(vhub->transfer, 16);
-		} else {
+		// if (variant == 0) {
+		// 	int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
+		// 	if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
+		// 		variant++;
+		// 	UDCDBG(vhub, "->");
+		// 	pr_hex(vhub->transfer, 16);
+		// } else {
 			// if (variant == 0) {
 			// 	int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
 			// 	if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
