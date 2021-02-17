@@ -176,7 +176,7 @@ static u16 variant = 0;
 		// spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
-#ifdef TX
+#ifndef TX
 		if(variant != 0) {
 			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09|", 10);
 			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 12);
