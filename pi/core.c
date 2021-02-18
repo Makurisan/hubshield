@@ -162,7 +162,7 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 #define WRITE_CMD 0x2a
 
-static u16 variant = 0;
+static u8 variant = 0;
  
 		memset(vhub->transfer, 0, 512);
 
@@ -171,6 +171,7 @@ static u16 variant = 0;
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifndef TX
 			memmove(vhub->transfer, "|\x01\x02|", 4);
+			vhub->transfer[1] = variant++;
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
 			pr_hex(vhub->transfer, 16);
