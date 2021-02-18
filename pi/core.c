@@ -315,7 +315,7 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, uint16
 
 	spi_message_init(&msg);
 
-	memmove(&vhub->transfer[3], buffer, length);
+	memmove(&vhub->transfer[2], buffer, length);
 
 	static u8 value = 0;
 
