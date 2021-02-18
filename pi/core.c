@@ -186,18 +186,19 @@ static u16 variant = 0;
 			pr_hex(vhub->transfer, 16);
 		}
 #else
-			UDCDBG(vhub, "Header");
 
-			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
-			pr_hex(vhub->transfer, 2);
+		UDCDBG(vhub, "Header");
 
-			u8 idx;
-			UDCDBG(vhub, "Data");
-			for (idx = 0; idx < 4; ++idx)
-			{
-				_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
-				pr_hex(vhub->transfer, 5);
-			}
+		_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
+		pr_hex(vhub->transfer, 2);
+
+		u8 idx;
+		UDCDBG(vhub, "Data");
+		for (idx = 0; idx < 4; ++idx)
+		{
+			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
+			pr_hex(vhub->transfer, 5);
+		}
 
 #endif
 		mutex_unlock(&vhub->spi_bus_mutex);
