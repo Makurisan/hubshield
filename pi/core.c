@@ -41,9 +41,9 @@ static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val);
 static int spi_re(struct ast_vhub *vhub, unsigned int reg,
 					void *val, size_t val_size);
 					
-static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,
+static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
-static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,
+static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
 
 void pr_hex(const char *mem, int count)
@@ -133,7 +133,7 @@ void ast_vhub_free_request(struct usb_ep *u_ep, struct usb_request *u_req)
 	kfree(req);
 }
 
-static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
 
 #define GPIO_CLIENT_GPIO_IRQ 17
 int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
@@ -159,9 +159,6 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 		mutex_lock(&vhub->spi_bus_mutex);
 
-
-
-
 #define MASTER_TX_CMD 0x2a // master transmit with READ/WRITE
 #define MASTER_RX_CMD 0x1a // master want to receive someting
 
@@ -173,22 +170,30 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 static u16 variant = 0;
  
 		memset(vhub->transfer, 0, 512);
-		// spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 13);
+		// spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
-
-		if(variant != 0) {
-			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09|", 10);
-			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 12);
-			pr_hex(vhub->transfer, 16);	
-		} else {
-			++variant;
+#ifndef TX
 			memmove(vhub->transfer, "|\x02\x03|", 4);
-			//spi_buf_rd(vhub, MASTER_TX_CMD, vhub->transfer, 12);
-			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
+			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
+			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
 			pr_hex(vhub->transfer, 16);
+#else
+
+		UDCDBG(vhub, "Header");
+
+		spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
+		pr_hex(vhub->transfer, 2);
+
+		u8 idx;
+		UDCDBG(vhub, "Data");
+		for (idx = 0; idx < 4; ++idx)
+		{
+			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
+			pr_hex(vhub->transfer, 5);
 		}
 
+#endif
 		mutex_unlock(&vhub->spi_bus_mutex);
 
 	}
@@ -253,7 +258,7 @@ static int ast_vhub_remove(struct spi_device *spi)
 	return 0;
 }
 
-static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -269,9 +274,11 @@ static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, si
 
 	spi_sync(spi, &m);
 
+  return 0;
+
 }
 
-static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -282,7 +289,7 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 	memset(t, 0, sizeof(t));
 
 	command[0] = reg;
-	command[1] = 0;
+	command[1] = crc8(vbus_crc_table, buffer, length, 0);
 	t[0].tx_buf = command;
 	t[0].len = 2;
 	spi_message_add_tail(&t[0], &m);
@@ -293,9 +300,10 @@ static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, siz
 
 	spi_sync(spi, &m);
 
+	return command[1];
 }
 
-static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer transfer;
