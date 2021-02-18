@@ -133,7 +133,7 @@ void ast_vhub_free_request(struct usb_ep *u_ep, struct usb_request *u_req)
 	kfree(req);
 }
 
-static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
 
 #define GPIO_CLIENT_GPIO_IRQ 17
 int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
@@ -170,15 +170,14 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 static u16 variant = 0;
  
 		memset(vhub->transfer, 0, 512);
-		// spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 13);
+		// spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifndef TX
 			memmove(vhub->transfer, "|\x02\x03|", 4);
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
-			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
+			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
 			pr_hex(vhub->transfer, 16);
-		}
 #else
 
 		UDCDBG(vhub, "Header");
@@ -302,7 +301,7 @@ static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer
 	return command[1];
 }
 
-static void spi_buf_wr(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer transfer;
