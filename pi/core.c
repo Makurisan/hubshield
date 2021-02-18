@@ -134,10 +134,10 @@ void ast_vhub_free_request(struct usb_ep *u_ep, struct usb_request *u_req)
 	kfree(req);
 }
 
-static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, uint16_t length);
 
 #define GPIO_CLIENT_GPIO_IRQ 17
-int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
+		int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
 int irq_calls = 0;
 static irqreturn_t ast_vhub_irq(int irq, void *data)
 { 
@@ -305,7 +305,7 @@ static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer
 }
 
 
-static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
+static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, uint16_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer transfer;
