@@ -318,7 +318,7 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t
 	// our header reg and length field
 	vhub->transfer[0] = reg;
 	vhub->transfer[1] = length;
-	vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
+	//vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
 
 	transfer.tx_buf = vhub->transfer;
 	transfer.len = 3 + length;
