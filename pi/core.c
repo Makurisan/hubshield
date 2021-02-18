@@ -274,6 +274,8 @@ static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffe
 
 	spi_sync(spi, &m);
 
+  return 0;
+
 }
 
 static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
