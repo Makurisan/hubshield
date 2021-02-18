@@ -41,9 +41,9 @@ static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val);
 static int spi_re(struct ast_vhub *vhub, unsigned int reg,
 					void *val, size_t val_size);
 					
-static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,
+static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
-static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,
+static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
 
 void pr_hex(const char *mem, int count)
@@ -176,47 +176,26 @@ static u16 variant = 0;
 #ifdef TX
 		if(variant != 0) {
 			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09|", 10);
-			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 12);
+			spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 12);
 			pr_hex(vhub->transfer, 16);	
 		} else {
 			++variant;
 			memmove(vhub->transfer, "|\x02\x03|", 4);
-			//spi_buf_rd(vhub, MASTER_TX_CMD, vhub->transfer, 12);
+			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
 			pr_hex(vhub->transfer, 16);
 		}
 #else
-		// if (variant == 0) {
-		// 	int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-		// 	if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
-		// 		variant++;
-		// 	UDCDBG(vhub, "->");
-		// 	pr_hex(vhub->transfer, 16);
-		// } else {
-			// if (variant == 0) {
-			// 	int ret = spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-			// 	if (vhub->transfer[2] != 0 && vhub->transfer[3] != 0)
-			// 		variant++;
-			// 	UDCDBG(vhub, "->");
-			// 	pr_hex(vhub->transfer, 16);
-			// } else {
-			// 	u8 idx;
-			// 	for (idx = 0; idx < 5; ++idx)
-			// 	{
-			// 		_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 4);
-			// 		pr_hex(vhub->transfer, 16);
-			// 	}
-			// } 
 			UDCDBG(vhub, "Header");
 
-			spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 2);
+			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
 			pr_hex(vhub->transfer, 2);
 
 			u8 idx;
 			UDCDBG(vhub, "Data");
 			for (idx = 0; idx < 4; ++idx)
 			{
-				_spi_buf_rd(vhub, MASTER_RX_CMD, vhub->transfer, 5);
+				_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
 				pr_hex(vhub->transfer, 5);
 			}
 
@@ -285,7 +264,7 @@ static int ast_vhub_remove(struct spi_device *spi)
 	return 0;
 }
 
-static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -303,7 +282,7 @@ static int _spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, si
 
 }
 
-static int spi_buf_rd(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
