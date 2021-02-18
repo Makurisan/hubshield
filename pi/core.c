@@ -174,12 +174,6 @@ static u16 variant = 0;
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifdef TX
-		if(variant != 0) {
-			// memmove(vhub->transfer, "|\x02\x03\x04\x05\x06\x07\x08\x09|", 10);
-			spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 12);
-			pr_hex(vhub->transfer, 16);	
-		} else {
-			++variant;
 			memmove(vhub->transfer, "|\x02\x03|", 4);
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
@@ -189,7 +183,7 @@ static u16 variant = 0;
 
 		UDCDBG(vhub, "Header");
 
-		_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
+		spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
 		pr_hex(vhub->transfer, 2);
 
 		u8 idx;
