@@ -36,10 +36,10 @@
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
-static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
-			void *val, size_t val_size);
-static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
-			void *val, size_t val_size);
+static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg, 
+														 void *buffer, size_t length);
+static void _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
+														 void *buffer, size_t length);
 
 void pr_hex(const char *mem, int count)
 {
@@ -388,9 +388,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 		return -EFAULT;
 	}
 
-	// test to write
-	// spi_wr8(vhub, 0x02, 0x32);	
-
+	// print the spi clock rate
 	dev_info(&vhub->spi->dev, "Spi clock set at %u KHz.\n",
 	 		(vhub->spi->max_speed_hz + 500) / 1000);
 
@@ -404,9 +402,9 @@ static int ast_vhub_probe(struct spi_device *spi)
 	// rc = of_property_read_u32(np, "reset-gpios", &vhub->max_ports);
 	// dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
 
+	// todo: set the pin pulldown
+
 	// set the irq handler
-	// rc = devm_request_irq(&vhub->spi->dev, vhub->irq, ast_vhub_irq,
-	// 				0 /*IRQF_TRIGGER_FALLING*/, KBUILD_MODNAME, vhub);
 	rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq,
 				NULL, ast_vhub_irq,	IRQF_TRIGGER_FALLING|IRQF_ONESHOT|IRQF_NO_SUSPEND, "vusbsoc", vhub);
 	if (rc)
@@ -426,7 +424,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 		goto err;
 	}
 
-	// Init vHub EP0
+	// Init vHub EP0, control endpoint
 	ast_vhub_init_ep0(vhub, &vhub->ep0, NULL);
 
 	// Init devices
@@ -445,6 +443,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 	//  Initialize HW
 	ast_vhub_init_hw(vhub);
 
+	// todo check usb1/usb2, what should we use
 	dev_info(&spi->dev, "Initialized virtual hub in USB%d mode\n",
 				vhub->force_usb1 ? 1 : 2);
 
@@ -469,7 +468,6 @@ static struct spi_driver ast_vhub_driver = {
 		.of_match_table	= ast_vhub_dt_ids,
 	},
 };
-//module_platform_driver(ast_vhub_driver);
 module_spi_driver(ast_vhub_driver);
 
 MODULE_DESCRIPTION("Hubshield virtual hub udc driver");
