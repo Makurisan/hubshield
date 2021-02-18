@@ -173,7 +173,7 @@ static u16 variant = 0;
 		// spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
-#ifdef TX
+#ifndef TX
 			memmove(vhub->transfer, "|\x02\x03|", 4);
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_buf_wr(vhub, MASTER_TX_CMD, vhub->transfer, 4);
