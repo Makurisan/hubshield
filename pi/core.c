@@ -36,13 +36,7 @@
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
-static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val);
-
-static int spi_re(struct ast_vhub *vhub, unsigned int reg,
-					void *val, size_t val_size);
-					
-
-static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
+static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
 static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
 			void *val, size_t val_size);
@@ -260,7 +254,7 @@ static int ast_vhub_remove(struct spi_device *spi)
 	return 0;
 }
 
-static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static void _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -275,12 +269,11 @@ static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffe
 	spi_message_add_tail(&t[1], &m);
 
 	spi_sync(spi, &m);
-  
-  return 0;
+
 }
 
 
-static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -330,12 +323,6 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, uint16
 	spi_message_add_tail(&transfer, &msg);
 	spi_sync(spi, &msg);
 
-  return 0;
-}
-
-static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val)
-{
-  return 0;
 }
 
 static int ast_vhub_probe(struct spi_device *spi)
