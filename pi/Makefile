@@ -6,9 +6,9 @@ KERNEL_DIR ?= $(HOME)/rpi/linux
 
 all:
 	        make -C $(KERNEL_DIR) \
-	                ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
+	                ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
 					                M=$(PWD) modules
 clean:
 	        make -C $(KERNEL_DIR) \
-			ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- \
-						      M=$(PWD) clean
+			ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+							                M=$(PWD) clean
