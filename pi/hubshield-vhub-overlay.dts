@@ -40,7 +40,16 @@
 			};
 		};
 	};
-
+	fragment@2 {
+		target = <&gpio>;
+		__overlay__ {
+			vhub_pins: vhub_pins {
+				brcm,pins = <5>;
+				brcm,function = <0>; // input
+				brcm,pull = <1>;     // down
+			};
+		};
+	};
 	__overrides__ {
 		ports = <&vhub>,"max-ports:0";
 		spi_irq = <&vhub>,"interrupts:0";
