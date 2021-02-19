@@ -10,7 +10,7 @@
  */
 
 / {
-	compatible = "brcm,bcm2711";
+	compatible = "brcm,BCM2837";
 
 	fragment@0 {
 		target = <&spidev0>;
