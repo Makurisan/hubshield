@@ -36,15 +36,10 @@
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
-static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val);
-
-static int spi_re(struct ast_vhub *vhub, unsigned int reg,
-					void *val, size_t val_size);
-					
-static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
-			void *val, size_t val_size);
-static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
-			void *val, size_t val_size);
+static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg, 
+														 void *buffer, size_t length);
+static void _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,
+														 void *buffer, size_t length);
 
 void pr_hex(const char *mem, int count)
 {
@@ -136,7 +131,7 @@ void ast_vhub_free_request(struct usb_ep *u_ep, struct usb_request *u_req)
 static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
 
 #define GPIO_CLIENT_GPIO_IRQ 17
-int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
+		int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
 int irq_calls = 0;
 static irqreturn_t ast_vhub_irq(int irq, void *data)
 { 
@@ -167,14 +162,15 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 #define WRITE_CMD 0x2a
 
-static u16 variant = 0;
+static u8 variant = 0;
  
 		memset(vhub->transfer, 0, 512);
 		// spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifndef TX
-			memmove(vhub->transfer, "|\x02\x03|", 4);
+			memmove(vhub->transfer, "|\x01\x02\x03\x02|", 6);
+			vhub->transfer[1] = variant++;
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
 			pr_hex(vhub->transfer, 16);
@@ -258,7 +254,7 @@ static int ast_vhub_remove(struct spi_device *spi)
 	return 0;
 }
 
-static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+static void _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
@@ -276,12 +272,13 @@ static int _spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffe
 
 }
 
-static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
+
+static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer, size_t length)
 {
 	struct spi_device *spi = vhub->spi;
 	struct spi_transfer	t[2];
 	struct spi_message	m;
-	u8 command[5];
+	u8 command[2];
 
 	spi_message_init(&m);
 	memset(t, 0, sizeof(t));
@@ -298,7 +295,6 @@ static int spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffer
 
 	spi_sync(spi, &m);
 
-	return command[1];
 }
 
 static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
@@ -311,7 +307,7 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t
 
 	spi_message_init(&msg);
 
-	memmove(&vhub->transfer[3], buffer, length);
+	memmove(&vhub->transfer[2], buffer, length);
 
 	static u8 value = 0;
 
@@ -321,31 +317,11 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t
 	//vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
 
 	transfer.tx_buf = vhub->transfer;
-	transfer.len = 3 + length;
+	transfer.len = 2 + length;
 
 	spi_message_add_tail(&transfer, &msg);
 	spi_sync(spi, &msg);
-}
 
-static void spi_wr8(struct ast_vhub *vhub, unsigned int reg, u8 val)
-{
-	struct spi_device *spi = vhub->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 txdata[5];
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	vhub->transfer[0] = 0x11; // cmd byte
-	vhub->transfer[1] = val;  // read/write
-	
-	transfer.tx_buf = vhub->transfer;
-	transfer.len = sizeof(reg) + sizeof(val) ;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
 }
 
 static int ast_vhub_probe(struct spi_device *spi)
@@ -411,9 +387,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 		return -EFAULT;
 	}
 
-	// test to write
-	// spi_wr8(vhub, 0x02, 0x32);	
-
+	// print the spi clock rate
 	dev_info(&vhub->spi->dev, "Spi clock set at %u KHz.\n",
 	 		(vhub->spi->max_speed_hz + 500) / 1000);
 
@@ -427,9 +401,9 @@ static int ast_vhub_probe(struct spi_device *spi)
 	// rc = of_property_read_u32(np, "reset-gpios", &vhub->max_ports);
 	// dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
 
+	// todo: set the pin pulldown
+
 	// set the irq handler
-	// rc = devm_request_irq(&vhub->spi->dev, vhub->irq, ast_vhub_irq,
-	// 				0 /*IRQF_TRIGGER_FALLING*/, KBUILD_MODNAME, vhub);
 	rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq,
 				NULL, ast_vhub_irq,	IRQF_TRIGGER_FALLING|IRQF_ONESHOT|IRQF_NO_SUSPEND, "vusbsoc", vhub);
 	if (rc)
@@ -449,7 +423,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 		goto err;
 	}
 
-	// Init vHub EP0
+	// Init vHub EP0, control endpoint
 	ast_vhub_init_ep0(vhub, &vhub->ep0, NULL);
 
 	// Init devices
@@ -468,6 +442,7 @@ static int ast_vhub_probe(struct spi_device *spi)
 	//  Initialize HW
 	ast_vhub_init_hw(vhub);
 
+	// todo check usb1/usb2, what should we use
 	dev_info(&spi->dev, "Initialized virtual hub in USB%d mode\n",
 				vhub->force_usb1 ? 1 : 2);
 
@@ -492,7 +467,6 @@ static struct spi_driver ast_vhub_driver = {
 		.of_match_table	= ast_vhub_dt_ids,
 	},
 };
-//module_platform_driver(ast_vhub_driver);
 module_spi_driver(ast_vhub_driver);
 
 MODULE_DESCRIPTION("Hubshield virtual hub udc driver");
