@@ -1,3 +1,5 @@
+# exit if something goes wrong
+set -e
 # list the actual files
 ls -lha
 # remove running kernel

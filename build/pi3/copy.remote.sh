@@ -1,4 +1,6 @@
- git rev-parse --show-toplevel
+# exit if something goes wrong
+set -e
+git rev-parse --show-toplevel
 # ssh pi@pi3 "cd ~/vusb-build; source ./notify.sh"
 ssh pi@pi3 "clear"
 # kernel
