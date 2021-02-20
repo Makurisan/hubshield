@@ -3,5 +3,10 @@ ssh pi@pi3 "clear"
 # kernel
 scp ./build/v-hub.ko pi@pi3:/home/pi/vusb-build
 # device tree
-scp ./build/hubshield-vhub.dtbo pi@pi3:/home/pi/vusb-build
+scp ./build/vhub-overlay.dtbo pi@pi3:/home/pi/vusb-build
+
+# delete file which we dont need
+cd build
+rm -rf .*
+cd -
 
