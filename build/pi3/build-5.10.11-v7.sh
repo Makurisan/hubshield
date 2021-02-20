@@ -1,5 +1,8 @@
+ echo 'actual project:' + git rev-parse --show-toplevel
 # delete all file 
- rm -rf ./build/*; rm -rf ./build/.*
+rm ./build -f
+rm ./build -f
+return
  # copy the source
 cp -r ../../source/* ./build
 # copy kernel specific makefile to build directory 
