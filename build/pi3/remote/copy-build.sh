@@ -15,3 +15,6 @@ dmesg  | tail -n 5
 # list the loaded overlays
 # you can look: cd /sys/kernel/config/device-tree/overlays/
 sudo dtoverlay -l
+# list the gpio, for help raspi-gpio help
+ #raspi-gpio get 5,25
+
