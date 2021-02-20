@@ -1,16 +1,13 @@
 /*
- * Universal device tree overlay for SPI devices
+ * Device Tree overlay for Virtual Hub HAT by Kubica
+ *
  */
 
 /dts-v1/;
 /plugin/;
 
-/*
-#include <include/dt-bindings/interrupt-controller/irq.h>
- */
-
 / {
-	compatible = "brcm,bcm2711";
+	compatible = "brcm,bcm2835";
 
 	fragment@0 {
 		target = <&spidev0>;
@@ -26,25 +23,36 @@
     		#address-cells = <1>;
 			#size-cells = <0>;
  			status = "okay";
-      vhub: vhub@48 {
+			vhub: vhub@48 {
 				compatible = "hubshield,v-hub";
-				reg = <0x0>;
+				reg = <0>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
 				interrupts = <5 2>; /* IRQ_TYPE_EDGE_FALLING */
-        reset-gpios = <&gpio 25 1>; // GPIO_ACTIVE_HIGH
+				reset-gpios = <&gpio 25 1>; // GPIO_ACTIVE_HIGH
 				max-ports = <5>; // count of virtual hub ports
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <2>;
-				spi-max-frequency = <1000000>;
+				spi-max-frequency = <10000000>;
 			};
 		};
 	};
-
+	fragment@2 {
+		target = <&gpio>;
+		__overlay__ {
+			vhub_pins: vhub_pins {
+				brcm,pins = <5 25>;	   		
+				brcm,function = <0 1>; // input, output
+				brcm,pull = <1 0>;     // down, none
+			};
+		};
+	};
 	__overrides__ {
 		ports = <&vhub>,"max-ports:0";
 		spi_irq = <&vhub>,"interrupts:0";
-    spi_cs =  <&vhub>,"reg:0";
+		spi_cs =  <&vhub>,"reg:0";
 		speed =  <&vhub>,"spi-max-frequency:0";
     };
 

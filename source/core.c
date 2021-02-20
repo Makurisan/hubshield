@@ -169,7 +169,7 @@ static u8 variant = 0;
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifndef TX
-			memmove(vhub->transfer, "|\x01\x02|", 4);
+			memmove(vhub->transfer, "|\x01\x02\x03\x02|", 6);
 			vhub->transfer[1] = variant++;
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
 			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
