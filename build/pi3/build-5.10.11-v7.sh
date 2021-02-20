@@ -1,10 +1,12 @@
- echo 'actual project:' + git rev-parse --show-toplevel
+git rev-parse --show-toplevel
 # delete all file 
-rm ./build -f
-rm ./build -f
-return
+cd build
+rm ./* -rf
+rm . -rf
+cd -
  # copy the source
 cp -r ../../source/* ./build
+#return
 # copy kernel specific makefile to build directory 
 cp Makefile.5.10.11-v7 ./build/Makefile
 # copy dts
