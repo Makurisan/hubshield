@@ -7,6 +7,6 @@ scp ./build/vhub-overlay.dtbo pi@pi3:/home/pi/vusb-build
 
 # delete file which we dont need
 cd build
-rm -rf .*
+rm -rf .*; rm -rf *.o
 cd -
 
