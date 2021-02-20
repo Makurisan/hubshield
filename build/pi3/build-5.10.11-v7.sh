@@ -1,4 +1,8 @@
+# exit if something goes wrong
+set -e
 git rev-parse --show-toplevel
+# create dir build if not exists
+[ ! -d "./build/" ] && mkdir build
 # delete all file 
 cd build
 rm ./* -rf
