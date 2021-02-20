@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0+
+obj-m  := v-hub.o 
+v-hub-objs := hub.o core.o ep0.o epn.o dev.o hub.o
+
+KERNEL_DIR ?= /mnt/g/linux/linux-5.10.4-v8
+
+all:
+	        make -C $(KERNEL_DIR) \
+	                ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+					                M=$(PWD) modules
+clean:
+	        make -C $(KERNEL_DIR) \
+			ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
+							                M=$(PWD) clean
