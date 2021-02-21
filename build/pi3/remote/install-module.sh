@@ -1,5 +1,3 @@
-# exit if something goes wrong
-set -e
 # list the actual files
 ls -lha
 # remove running kernel
@@ -8,6 +6,8 @@ sudo rmmod v-hub
 sudo dtoverlay -r 0
 # copy kernel to lib
 sudo cp ./v-hub.ko /lib/modules/$(uname -r)/extras
+# exit if something goes wrong
+set -e
 # load the kernel
 sudo modprobe v-hub
 # copy the overlay
