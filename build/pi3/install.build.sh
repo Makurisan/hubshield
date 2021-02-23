@@ -12,7 +12,7 @@ set -e
 cp -r ../../source/* ./build
 #return
 # copy kernel specific makefile to build directory 
-cp Makefile.5.10.11-v7 ./build/Makefile
+cp Makefile.5.10.17-v7 ./build/Makefile
 # copy dts
 cp ../vhub-pi-overlay.dts ./build/vhub-pi-overlay.dts
 # build dts
