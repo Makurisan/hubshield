@@ -159,6 +159,7 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 
 #define SLAVE_RX_CMD 0x3a
 #define SLAVE_TX_CMD 0x4a
+#define WRITE_COMMAND 0x80
 
 #define WRITE_CMD 0x2a
 
@@ -169,11 +170,10 @@ static u8 variant = 0;
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
 #ifndef TX
-			memmove(vhub->transfer, "|\x01\x02\x03\x02|", 6);
 			vhub->transfer[1] = variant++;
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
-			spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 4);
-			pr_hex(vhub->transfer, 16);
+			spi_write_buffer(vhub, MASTER_TX_CMD, "\x01\x01|\x01\x02\x03\x02|", 8);
+			pr_hex(vhub->transfer, 14);
 #else
 
 		UDCDBG(vhub, "Header");
@@ -303,13 +303,10 @@ static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t
 	struct spi_transfer transfer;
 	struct spi_message msg;
 
-	memset(&transfer, 0, sizeof(transfer));
-
 	spi_message_init(&msg);
 
+  // buffer can be the same as transfer
 	memmove(&vhub->transfer[2], buffer, length);
-
-	static u8 value = 0;
 
 	// our header reg and length field
 	vhub->transfer[0] = reg;
