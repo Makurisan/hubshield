@@ -230,6 +230,15 @@ struct ast_vhub_desc {
 	__le32	w1;
 };
 
+typedef union {
+  struct {
+    u8 reg : 6;  /* Register R0 through ... 64 */
+    u8 ext : 1; 	/* extended cmd byte, 2Bytes */
+    u8 dir : 1;  /* 1=w, 0=r */
+  } bit;
+  u8 val;
+} spi_cmd_t;
+
 /* A transfer request, either core-originated or internal */
 struct ast_vhub_req {
 	struct usb_request	req;
