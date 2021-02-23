@@ -25,7 +25,7 @@
  			status = "okay";
 			vhub: vhub@48 {
 				compatible = "hubshield,v-hub";
-				reg = <0>;
+				reg = <0>; /* chip select */
 				pinctrl-names = "default";
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
@@ -35,7 +35,7 @@
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <2>;
-				spi-max-frequency = <10000000>;
+				spi-max-frequency = <5000000>;
 			};
 		};
 	};
