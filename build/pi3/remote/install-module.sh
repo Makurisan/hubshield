@@ -11,6 +11,7 @@ set -e
 # load the kernel
 sudo modprobe v-hub
 # copy the overlay
+sudo cp vhub-overlay.dtbo /boot/overlays
 sudo dtoverlay vhub-overlay.dtbo
 # print the last 5 kernel prints
 dmesg  | tail -n 5
