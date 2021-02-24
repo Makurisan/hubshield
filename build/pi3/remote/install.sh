@@ -10,7 +10,7 @@ sudo cp ./v-hub.ko /lib/modules/$(uname -r)/extras
 set -e
 # load the kernel
 sudo modprobe v-hub
-# copy the overlay
+# copy and start the overlay
 sudo cp vhub-overlay.dtbo /boot/overlays
 sudo dtoverlay vhub-overlay.dtbo
 # print the last 5 kernel prints
@@ -19,5 +19,5 @@ dmesg  | tail -n 5
 # you can look: cd /sys/kernel/config/device-tree/overlays/
 sudo dtoverlay -l
 # list the gpio, for help raspi-gpio help
-raspi-gpio get 5,25
+raspi-gpio get 5,6
 
