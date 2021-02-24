@@ -4,4 +4,4 @@ set -e
 cd build
 make
 cd -
-./install.remote.sh
+./install.sh
