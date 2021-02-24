@@ -128,7 +128,7 @@ void ast_vhub_free_request(struct usb_ep *u_ep, struct usb_request *u_req)
 	kfree(req);
 }
 
-static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
+static void _spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *val, size_t val_size);
 
 #define GPIO_CLIENT_GPIO_IRQ 17
 		int g_gpio_ip_irq = GPIO_CLIENT_GPIO_IRQ;
@@ -166,30 +166,34 @@ static irqreturn_t ast_vhub_irq(int irq, void *data)
 static u8 variant = 0;
  
 		memset(vhub->transfer, 0, 512);
-		// spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 13);
+		// _spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 13);
 		// pr_hex(vhub->transfer, 16);	
 		// spi_wr8(vhub, MASTER_RX_CMD, 1);
-#ifndef TX
-			vhub->transfer[1] = variant++;
+//#ifndef TX
+  {
+      memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
+      //vhub->transfer[1] = variant++;
 			//spi_read_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 12);
-			spi_write_buffer(vhub, MASTER_TX_CMD, "\x01\x01|\x01\x02\x03\x02|", 8);
-			pr_hex(vhub->transfer, 14);
-#else
-
-		UDCDBG(vhub, "Header");
-
-		spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
-		pr_hex(vhub->transfer, 2);
-
-		u8 idx;
-		UDCDBG(vhub, "Data");
-		for (idx = 0; idx < 4; ++idx)
-		{
-			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
-			pr_hex(vhub->transfer, 5);
-		}
-
-#endif
+			_spi_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 8);
+   /*   vhub->transfer[3] = vhub->spi->mode;*/
+  		pr_hex(vhub->transfer, 14);
+    }
+//#else
+//
+//		UDCDBG(vhub, "Header");
+//
+//		spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 2);
+//		pr_hex(vhub->transfer, 2);
+//
+//		u8 idx;
+//		UDCDBG(vhub, "Data");
+//		for (idx = 0; idx < 4; ++idx)
+//		{
+//			_spi_read_buffer(vhub, MASTER_RX_CMD, vhub->transfer, 5);
+//			pr_hex(vhub->transfer, 5);
+//		}
+//
+//#endif
 		mutex_unlock(&vhub->spi_bus_mutex);
 
 	}
@@ -297,28 +301,61 @@ static void spi_read_buffer(struct ast_vhub *vhub, unsigned int reg,	void *buffe
 
 }
 
-static void spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
+static ssize_t spidev_sync(struct ast_vhub* vhub, struct spi_message* message)
 {
-	struct spi_device *spi = vhub->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
+  int status;
+  struct spi_device* spi;
 
-	spi_message_init(&msg);
+  spin_lock_irq(&vhub->lock);
+  spi = vhub->spi;
+  spin_unlock_irq(&vhub->lock);
 
-  // buffer can be the same as transfer
-	memmove(&vhub->transfer[2], buffer, length);
+  if (spi == NULL)
+    status = -ESHUTDOWN;
+  else
+    status = spi_sync(spi, message);
 
-	// our header reg and length field
-	vhub->transfer[0] = reg;
-	vhub->transfer[1] = length;
-	//vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
+  if (status == 0)
+    status = message->actual_length;
 
-	transfer.tx_buf = vhub->transfer;
-	transfer.len = 2 + length;
+  return status;
+}
 
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
+static inline ssize_t spidev_sync_write(struct ast_vhub* vhub, size_t len)
+{
+  struct spi_transfer	t = {
+      .tx_buf = vhub->transfer,
+      .len = len,
+      .speed_hz = vhub->spi->max_speed_hz,
+  };
+  struct spi_message	m;
 
+  spi_message_init(&m);
+  spi_message_add_tail(&t, &m);
+  return spidev_sync(vhub, &m);
+}
+
+static void _spi_write_buffer(struct ast_vhub *vhub, u8 reg, void *buffer, size_t length)
+{
+  struct spi_device* spi = vhub->spi;
+  struct spi_transfer transfer;
+  struct spi_message msg;
+
+  memset(&transfer, 0, sizeof(transfer));
+
+  spi_message_init(&msg);
+
+  memmove(&vhub->transfer[3], buffer, length);
+  // our header reg and length field
+  vhub->transfer[0] = reg;
+  vhub->transfer[1] = length;
+  vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
+
+  transfer.tx_buf = vhub->transfer;
+  transfer.len = 3 + length;
+
+  spi_message_add_tail(&transfer, &msg);
+  spi_sync(spi, &msg);
 }
 
 static int ast_vhub_probe(struct spi_device *spi)
@@ -378,16 +415,18 @@ static int ast_vhub_probe(struct spi_device *spi)
 		return -ENODEV;
 	}
 
-	spi->bits_per_word = 8;
+	 // spi defs
+  vhub->spi->mode = SPI_MODE_0;
+  spi->bits_per_word = 8;
 	if (spi_setup(vhub->spi) < 0) {
 		dev_err(&vhub->spi->dev, "Unable to setup SPI bus");
 		return -EFAULT;
 	}
 
 	// print the spi clock rate
-	dev_info(&vhub->spi->dev, "Spi clock set at %u KHz.\n",
-	 		(vhub->spi->max_speed_hz + 500) / 1000);
-
+  dev_info(&vhub->spi->dev, "Spi clock max %u KHz.\n",
+    (vhub->spi->max_speed_hz + 500) / 1000);
+   
 	spin_lock_init(&vhub->lock);
 	mutex_init(&vhub->spi_bus_mutex);
 
