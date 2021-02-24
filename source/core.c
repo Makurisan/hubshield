@@ -212,13 +212,14 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
 #define SLAVE_RX_CMD 0x3a
 #define SLAVE_TX_CMD 0x4a
 
-#define WRITE_CMD 0x2a
+#define WRITE_CMD_WRITE 0x80
+#define WRITE_CMD_READ  0x40
 
     static u16 variant = 0;
 
     memset(vhub->transfer, 0, 512);
     memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
-    vusb_write_buffer(vhub, MASTER_TX_CMD, vhub->transfer, 8);
+    vusb_write_buffer(vhub, WRITE_CMD_WRITE | MASTER_TX_CMD, vhub->transfer, 8);
     pr_hex(vhub->transfer, 16);
 
     mutex_unlock(&vhub->spi_bus_mutex);
