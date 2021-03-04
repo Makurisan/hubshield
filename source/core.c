@@ -36,7 +36,17 @@
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
+void pr_hex_mark(const char* mem, int count, int mark);
+
 void pr_hex(const char* mem, int count)
+{
+  pr_hex_mark(mem, count, 0);
+}
+
+#define PR_WRITE 1
+#define PR_READ  2
+
+void pr_hex_mark(const char* mem, int count, int mark)
 {
   char hexbyte[11] = "";
   char hexline[126] = "";
@@ -49,7 +59,17 @@ void pr_hex(const char* mem, int count)
     if (((i + 1) % 16 == 0) && (i != 0) || (i + 1 == count))
     {
       k++;
-      printk(KERN_INFO "    %02x: %s\n", k, hexline); // print line to console
+      switch (mark) {
+      case PR_READ:
+         printk(KERN_INFO " r %02x: %s\n", k, hexline); // print line to console
+       break;
+      case PR_WRITE:
+         printk(KERN_INFO " w %02x: %s\n", k, hexline); // print line to console
+       break;
+      default:
+        printk(KERN_ERR "   %02x: %s\n", k, hexline); // print line to console
+        break;
+      }
       //syslog(LOG_INFO, "l%d: %s",k , hexline); // print line to syslog
       memset(&hexline[0], 0, sizeof(hexline)); // clear hexline array
     }
@@ -157,6 +177,49 @@ void ast_vhub_free_request(struct usb_ep* u_ep, struct usb_request* u_req)
   kfree(req);
 }
 
+// read the data from the SIE
+static int vusb_read_buffer(struct ast_vhub* vhub, void* buffer, size_t length)
+{
+  struct spi_device* spi = vhub->spi;
+  struct spi_transfer	transfer;
+  struct spi_message	m;
+
+  spi_message_init(&m);
+  memset(&transfer, 0, sizeof(transfer));
+  spi_cmd_t cmd;
+
+  memset(buffer, 0, sizeof(length));
+
+  // header 2 bytes
+  transfer.rx_buf = &cmd;
+  transfer.len = sizeof(spi_cmd_t);
+
+  spi_message_add_tail(&transfer, &m);
+  spi_sync(spi, &m);
+  
+  if (cmd.reg.bit.read || cmd.reg.bit.write)
+  {
+    memset(&buffer[2], 0, sizeof(length));
+    spi_message_init(&m);
+    // data
+    transfer.rx_buf = &buffer[2];
+    transfer.len = length;
+    spi_message_add_tail(&transfer, & m);
+
+    spi_sync(spi, &m);
+
+    pr_hex_mark(vhub->transfer, length, PR_READ);
+
+    return 1;
+  } 
+  else {
+    pr_hex((u8*)&cmd, 2);
+  }
+  return 0;
+}
+
+static u16 counts = 0;
+
 static void vusb_write_buffer(struct ast_vhub* vhub, u8 reg, void* buffer, size_t length)
 {
   struct spi_device* spi = vhub->spi;
@@ -172,7 +235,7 @@ static void vusb_write_buffer(struct ast_vhub* vhub, u8 reg, void* buffer, size_
   // header reg, length, crc
   vhub->transfer[0] = reg;
   vhub->transfer[1] = length;
-  vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
+  vhub->transfer[2] = ++counts; // crc8(vbus_crc_table, &vhub->transfer[2], length, 0);
 
   transfer.tx_buf = vhub->transfer;
   transfer.len = 3 + length;
@@ -206,22 +269,37 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
 
     mutex_lock(&vhub->spi_bus_mutex);
 
-#define MASTER_TX_CMD 0x2a // master transmit with READ/WRITE
-#define MASTER_RX_CMD 0x1a // master want to receive someting
+#define SLAVE_REGISTER_NVIC_RESET 0x31
 
-#define SLAVE_RX_CMD 0x3a
-#define SLAVE_TX_CMD 0x4a
-
+// read or write
 #define WRITE_CMD_WRITE 0x80
 #define WRITE_CMD_READ  0x40
 
-    static u16 variant = 0;
+static u32 count = 0;
 
-    memset(vhub->transfer, 0, 512);
-    memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
-    vusb_write_buffer(vhub, WRITE_CMD_WRITE | MASTER_TX_CMD, vhub->transfer, 8);
-    pr_hex(vhub->transfer, 16);
+  memset(vhub->transfer, 0, 512);
+    //memmove(vhub->transfer, "\xaa\xaa\xaa\xaa", 4);
+    //vusb_write_buffer(vhub, WRITE_CMD_WRITE | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
+    //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
+    //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
+//if ( 0 == (++count % 500))
 
+  memmove(vhub->transfer, "\x00\xcc\xcc\xcc\xcc", 4);
+  vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
+  pr_hex_mark(vhub->transfer, 7, PR_WRITE);
+
+
+// read
+    //if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
+    //  memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
+    //  vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 8);
+    //  pr_hex_mark(vhub->transfer, 8, PR_WRITE);
+    //}
+    //else {
+    //  memmove(vhub->transfer, "\x01\x01|\x11\x22\x33\x44|", 8);
+    //  vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 8);
+    //  pr_hex_mark(vhub->transfer, 8, PR_WRITE);
+    //}
     mutex_unlock(&vhub->spi_bus_mutex);
 
   }
