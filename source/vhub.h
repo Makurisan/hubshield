@@ -232,12 +232,18 @@ struct ast_vhub_desc {
 
 typedef union {
   struct {
-    u8 reg : 6;  /* Register R0 through ... 64 */
-    u8 ext : 1; 	/* extended cmd byte, 2Bytes */
-    u8 dir : 1;  /* 1=w, 0=r */
+    uint8_t reg : 6;  /* Register R0 through ... 64 */
+    uint8_t read : 1; 	/* read  */
+    uint8_t write : 1;  /* write */
   } bit;
   u8 val;
+} spi_reg_t;
+
+typedef struct spi_cmd {
+  spi_reg_t reg;
+  u8 length;
 } spi_cmd_t;
+
 
 /* A transfer request, either core-originated or internal */
 struct ast_vhub_req {
