@@ -277,7 +277,16 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
 
 static u32 count = 0;
 
+
   memset(vhub->transfer, 0, 512);
+
+  // read
+  if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
+    memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
+    vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 8);
+    pr_hex_mark(vhub->transfer, 8, PR_WRITE);
+  }
+
     //memmove(vhub->transfer, "\xaa\xaa\xaa\xaa", 4);
     //vusb_write_buffer(vhub, WRITE_CMD_WRITE | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
     //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
