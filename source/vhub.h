@@ -422,8 +422,9 @@ struct ast_vhub {
 
 	/* Per-port info */
 	struct ast_vhub_port		*ports;
-	u32				max_ports;
-	u32				port_irq_mask;
+  u32				max_ports;
+  u32				reset_gpio;
+  u32				port_irq_mask;
 
 	/* Generic EP data structures */
 	struct ast_vhub_ep		*epns;

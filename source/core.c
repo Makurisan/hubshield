@@ -283,7 +283,6 @@ static u32 count = 0;
     //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
     //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
 //if ( 0 == (++count % 500))
-
   memmove(vhub->transfer, "\x00\xcc\xcc\xcc\xcc", 4);
   vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
   pr_hex_mark(vhub->transfer, 7, PR_WRITE);
@@ -417,8 +416,8 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->port_irq_mask = GENMASK(VHUB_IRQ_DEV1_BIT + vhub->max_ports - 1,
     VHUB_IRQ_DEV1_BIT);
 
-  rc = devm_gpiod_get(&vhub->spi->dev, "reset-gpios", GPIOD_IN);
-  // rc = of_property_read_u32(np, "reset-gpios", &vhub->max_ports);
+  //rc = devm_gpiod_get(&vhub->spi->dev, "reset-gpios", GPIOD_IN);
+  rc = of_property_read_u32(np, "reset-gpios", &vhub->reset_gpio);
   dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
 
   // set the irq handler
