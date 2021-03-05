@@ -177,6 +177,60 @@ void ast_vhub_free_request(struct usb_ep* u_ep, struct usb_request* u_req)
   kfree(req);
 }
 
+static int spi_buf_rd(struct ast_vhub* vhub, unsigned int reg, void* buffer, size_t length)
+{
+  struct spi_device* spi = vhub->spi;
+  struct spi_transfer	t[2];
+  struct spi_message	m;
+
+  spi_message_init(&m);
+  memset(t, 0, sizeof(t));
+
+  //t[0].tx_buf = 0;
+  //t[0].len = 0;
+  //spi_message_add_tail(&t[0], &m);
+
+  t[1].rx_buf = buffer;
+  t[1].len = sizeof(spi_cmd_t);
+  spi_message_add_tail(&t[1], &m);
+
+  spi_sync(spi, &m);
+
+  spi_cmd_t* cmd = (spi_cmd_t*)buffer;
+
+  // check data
+  if (cmd->reg.bit.read || cmd->reg.bit.write)
+  {
+    // print header
+    pr_hex((u8*)buffer, 2);
+ 
+    u8 i = 0;
+ //   for (i = 0; i < 4; i++)
+    {
+      spi_message_init(&m);
+      memset(t, 0, sizeof(t));
+
+      //t[0].tx_buf = reg;
+      //t[0].len = 0;
+      //spi_message_add_tail(&t[0], &m);
+
+      t[1].rx_buf = buffer;
+      t[1].len = cmd->length;
+      spi_message_add_tail(&t[1], &m);
+
+      spi_sync(spi, &m);
+      pr_hex((u8*)buffer, t[1].len);
+
+    }
+    return 1;
+  }
+  else
+  {
+    pr_hex((u8*)buffer, 4);
+  }
+  return 0;
+}
+
 // read the data from the SIE
 static int vusb_read_buffer(struct ast_vhub* vhub, void* buffer, size_t length)
 {
@@ -185,35 +239,36 @@ static int vusb_read_buffer(struct ast_vhub* vhub, void* buffer, size_t length)
   struct spi_message	m;
 
   spi_message_init(&m);
-  memset(&transfer, 0, sizeof(transfer));
-  spi_cmd_t cmd;
-
-  memset(buffer, 0, sizeof(length));
 
   // header 2 bytes
-  transfer.rx_buf = &cmd;
+  transfer.rx_buf = buffer;
   transfer.len = sizeof(spi_cmd_t);
 
   spi_message_add_tail(&transfer, &m);
   spi_sync(spi, &m);
-  
-  if (cmd.reg.bit.read || cmd.reg.bit.write)
+
+  spi_cmd_t* cmd = (spi_cmd_t*)buffer;
+
+  // check data
+  if (cmd->reg.bit.read || cmd->reg.bit.write)
   {
-    memset(&buffer[2], 0, sizeof(length));
+    // print header
+    pr_hex((u8*)buffer, transfer.len);
+
     spi_message_init(&m);
     // data
-    transfer.rx_buf = &buffer[2];
-    transfer.len = length;
+    transfer.rx_buf = &buffer[sizeof(spi_cmd_t)];
+    transfer.len = length - sizeof(spi_cmd_t);
     spi_message_add_tail(&transfer, & m);
 
     spi_sync(spi, &m);
-
-    pr_hex_mark(vhub->transfer, length, PR_READ);
+    // print the whole buffer
+    pr_hex_mark(buffer, length, PR_READ);
 
     return 1;
   } 
   else {
-    pr_hex((u8*)&cmd, 2);
+    pr_hex((u8*)buffer, transfer.len);
   }
   return 0;
 }
@@ -281,10 +336,10 @@ static u32 count = 0;
   memset(vhub->transfer, 0, 512);
 
   // read
-  if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
-    memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
-    vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 8);
-    pr_hex_mark(vhub->transfer, 8, PR_WRITE);
+  if (spi_buf_rd(vhub, WRITE_CMD_READ, vhub->transfer, 2)) {
+    //memmove(vhub->transfer, "\x01\x07|\x01\x02\x03\x02|", 4);
+    //vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 8);
+    //pr_hex_mark(vhub->transfer, 8, PR_WRITE);
   }
 
     //memmove(vhub->transfer, "\xaa\xaa\xaa\xaa", 4);
@@ -292,7 +347,11 @@ static u32 count = 0;
     //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
     //pr_hex_mark(vhub->transfer, 7, PR_WRITE);
 //if ( 0 == (++count % 500))
-  memmove(vhub->transfer, "\x00\xcc\xcc\xcc\xcc", 4);
+  memmove(vhub->transfer, "\x00\xcc\xcc\xcc", 4);
+  vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
+  pr_hex_mark(vhub->transfer, 7, PR_WRITE);
+
+  memmove(vhub->transfer, "\x00\xfc\xc1\xbc\x00\xfc\xc1\xbc", 8);
   vusb_write_buffer(vhub, WRITE_CMD_READ | SLAVE_REGISTER_NVIC_RESET, vhub->transfer, 4);
   pr_hex_mark(vhub->transfer, 7, PR_WRITE);
 
