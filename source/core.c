@@ -305,7 +305,7 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
       }
     }
     else {
-      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, (u8)vhub->transfer[3]), PR_READ | PR_ERROR);
+      UDCVDBG(vhub, "ast_vhub_irq error with irq:%d, value*:%d \n", irq, 0);
     }
 
 #endif // DEBUG
