@@ -241,7 +241,9 @@ typedef union {
 
 typedef struct spi_cmd {
   spi_reg_t reg;
-  u8 length;
+  u8 crc8;
+  u16 length;
+  u8 data[0]; /* dummy */
 } spi_cmd_t;
 
 
