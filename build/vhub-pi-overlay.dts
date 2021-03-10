@@ -29,13 +29,13 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
-				interrupts = <5 2>; /* IRQ_TYPE_EDGE_FALLING */
+				interrupts = <5 2 19 2>; /* IRQ_TYPE_EDGE_FALLING */
 				reset-gpios = <&gpio 6 1>; // GPIO_ACTIVE_HIGH
 				max-ports = <5>; // count of virtual hub ports
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <2>;
-				spi-max-frequency = <5000000>;
+				spi-max-frequency = <50000>;
 			};
 		};
 	};
@@ -43,15 +43,17 @@
 		target = <&gpio>;
 		__overlay__ {
 			vhub_pins: vhub_pins {
-				brcm,pins = <5 6>;	   		
-				brcm,function = <0 1>; // input, output
-				brcm,pull = <1 0>;     // down, none
+				brcm,pins = <5 6 19>;	// irq, dtrdy, reset   		
+				brcm,function = <0 1 0>; // input, output
+				brcm,pull = <1 0 1>;     // down, none
 			};
 		};
 	};
+
 	__overrides__ {
 		ports = <&vhub>,"max-ports:0";
 		spi_irq = <&vhub>,"interrupts:0";
+		spi_dtrdy = <&vhub>,"interrupts:2";		
 		spi_cs =  <&vhub>,"reg:0";
 		speed =  <&vhub>,"spi-max-frequency:0";
     };
