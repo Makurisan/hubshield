@@ -55,10 +55,14 @@ void pr_hex_mark(const char* mem, int count, int mark)
   int i, k = 0;
   for (i = 0; i < count && count < sizeof(hexline); i++)
   {
-    sprintf(hexbyte, "%02X|", mem[i]);
+    if (i == 3)
+      sprintf(hexbyte, "%02X:", mem[i]);
+    else
+      sprintf(hexbyte, "%02X ", mem[i]);
     strcat(hexline, hexbyte);
+
     // print line every 16 bytes or if this is the last for-loop
-    if (((i + 1) % 20 == 0) && (i != 0) || (i + 1 == count)) {
+    if (((i + 1) % 24 == 0) && (i != 0) || (i + 1 == count)) {
       k++;
       switch (mark) {
       case PR_READ:
@@ -194,9 +198,9 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, size_t length)
 
   memset(&tr, 0, sizeof(tr));
 
-  // header 2 bytes
   tr.rx_buf = buffer;
-  tr.len = 3; //sizeof(spi_cmd_t);
+  // header 4 bytes
+  tr.len = offsetof(spi_cmd_t, data);
 
   spi_message_add_tail(&tr, &m);
   spi_sync(spi, &m);
@@ -209,39 +213,46 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, size_t length)
     memset(&tr, 0, sizeof(tr));
     spi_message_init(&m);
     // data
-    tr.rx_buf = &buffer[3];
-    tr.len = (u8)buffer[1];
-    spi_message_add_tail(&tr, &m);
-
-    if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == buffer[2] )
-      return 1;
-  } 
+    tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
+    if (cmd->length < 1024)
+    {
+      tr.len = cmd->length;
+      spi_message_add_tail(&tr, &m);
+      if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8)
+        return 1;
+    }
+    else {
+      UDCVDBG(vhub, "vusb_read_buffer spi buffer exceeds maximal size length: %02x\n", cmd->length);
+    }
+  }
   return 0;
 }
 
 //static u16 counts = 0;
 
-static int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, void* buffer, u8 length)
+static int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 {
   struct spi_device* spi = vhub->spi;
-  struct spi_transfer transfer;
+  struct spi_transfer t;
   struct spi_message msg;
 
-  memset(&transfer, 0, sizeof(transfer));
+  memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
 
-  // copy the out data
-  memmove(&vhub->transfer[3], buffer, length);
-
   // header reg, length, crc
-  vhub->transfer[0] = reg;
-  vhub->transfer[1] = length;
-  vhub->transfer[2] = crc8(vbus_crc_table, &vhub->transfer[3], length, 0);
+  spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
 
-  transfer.tx_buf = vhub->transfer;
-  transfer.len = 3 + length;
+  // copy the out data
+  memmove(cmd->data, buffer, length);
 
-  spi_message_add_tail(&transfer, &msg);
+  cmd->reg.val = reg;
+  cmd->crc8 = crc8(vbus_crc_table, cmd->data, length, 0);
+  cmd->length = length;
+
+  t.tx_buf = vhub->transfer;
+  t.len = offsetof(spi_cmd_t, data) + length;
+
+  spi_message_add_tail(&t, &msg);
 
   return !spi_sync(spi, &msg);
 }
@@ -273,7 +284,7 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
   #define WRITE_CMD_WRITE 0x80
   #define WRITE_CMD_READ  0x40
 
-    memset(vhub->transfer, 0, 512);
+    memset(vhub->transfer, 0, 1024);
 
     //if (vusb_write_buffer(vhub, WRITE_CMD_WRITE | DEVICE_PIPE_0, vhub->transfer, varsize)) {
     //  pr_hex_mark(vhub->transfer, min(10, (u8)vhub->transfer[3]), PR_WRITE);
@@ -283,29 +294,33 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
     //}
 
 #define DEBUG_SPI_CECK
-#define MAX_PRINT_COLUMN 64
+#define MAX_PRINT_COLUMN (u16)64
+#define MAX_OUTPUT 512
 
 #ifdef DEBUG_SPI_CECK
     // read
-    if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
-
+    if (vusb_read_buffer(vhub, vhub->transfer, 1024)) {
+    
+      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+      u8* data = vhub->transfer[offsetof(spi_cmd_t, data)];
       // print the whole buffer
-      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, (u8)vhub->transfer[3]), PR_READ);
+      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length), PR_READ);
 
-      static u8 varsize = 1;
-      get_random_bytes(&varsize, 1);
-      get_random_bytes(vhub->transfer, varsize);
-
+      // create random write buffer
+      u16 nlocCount = 0;
+      get_random_bytes(&nlocCount, 2);
+      u16  nCount = nlocCount % MAX_OUTPUT;
+      get_random_bytes(vhub->transfer, nCount);
       // write
-      if (vusb_write_buffer(vhub, WRITE_CMD_WRITE | DEVICE_PIPE_0, vhub->transfer, varsize)) {
-        pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, (u8)vhub->transfer[3]), PR_WRITE);
+      if (vusb_write_buffer(vhub, WRITE_CMD_WRITE | DEVICE_PIPE_0, vhub->transfer, nCount)) {
+        pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, nCount), PR_WRITE);
       }
       else {
-        pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, (u8)vhub->transfer[3]), PR_WRITE | PR_ERROR);
+        pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, nCount), PR_WRITE | PR_ERROR);
       }
     }
     else {
-      UDCVDBG(vhub, "ast_vhub_irq error with irq:%d, value*:%d \n", irq, 0);
+      UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value*:%d \n", 0, irq);
     }
 
 #endif // DEBUG
