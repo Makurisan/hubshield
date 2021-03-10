@@ -52,26 +52,27 @@ void pr_hex_mark(const char* mem, int count, int mark)
 {
   char hexbyte[11] = "";
   char hexline[126] = "";
-  int i;
+  int i, k = 0;
   for (i = 0; i < count && count < sizeof(hexline); i++)
   {
     sprintf(hexbyte, "%02X|", mem[i]);
     strcat(hexline, hexbyte);
     // print line every 16 bytes or if this is the last for-loop
-    if (((i + 1) % 24 == 0) && (i != 0) || (i + 1 == count)) {
+    if (((i + 1) % 20 == 0) && (i != 0) || (i + 1 == count)) {
+      k++;
       switch (mark) {
       case PR_READ:
-         printk(KERN_INFO " r : %s\n", hexline); // print line to console
-       break;
+        printk(KERN_INFO " r %02x: %s\n", k, hexline); // print line to console
+        break;
       case PR_WRITE:
-         printk(KERN_INFO " w : %s\n", hexline); // print line to console
-       break;
+        printk(KERN_INFO " w %02x: %s\n", k, hexline); // print line to console
+        break;
       default:
         if (mark & PR_WRITE) {
-          printk(KERN_ERR " w : %s\n", hexline); // print line to console
+          printk(KERN_ERR " w %02x: %s\n", k, hexline); // print line to console
         }
         else {
-          printk(KERN_ERR " r : %s\n", hexline); // print line to console
+          printk(KERN_ERR " w %02x: %s\n", k, hexline); // print line to console
         }
         break;
       }
@@ -282,7 +283,7 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
     //}
 
 #define DEBUG_SPI_CECK
-#define MAX_PRINT_COLUMN 20
+#define MAX_PRINT_COLUMN 64
 
 #ifdef DEBUG_SPI_CECK
     // read
