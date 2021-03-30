@@ -230,6 +230,7 @@ struct ast_vhub_desc {
 	__le32	w1;
 };
 
+#pragma pack(8)
 typedef union {
   struct {
     uint8_t reg : 6;  /* Register R0 through ... 64 */
@@ -239,12 +240,14 @@ typedef union {
   u8 val;
 } spi_reg_t;
 
+#pragma pack(8)
 typedef struct spi_cmd {
   spi_reg_t reg;
   u8 crc8;
   u16 length;
   u8 data[0]; /* dummy */
 } spi_cmd_t;
+#pragma pack()
 
 
 /* A transfer request, either core-originated or internal */
