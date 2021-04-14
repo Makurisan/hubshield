@@ -228,7 +228,8 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
     {
       tr.len = cmd->length;
       spi_message_add_tail(&tr, &m);
-      if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8) {
+      if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8) { 
+        //
       //  UDCVDBG(vhub, "vusb_read_buffer back from event wait: %02d, flag: %d, value:%d\n", cmd->length, flag, value);
         flag = 1; 
         wake_up_interruptible(&wq);
@@ -263,9 +264,9 @@ static int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 leng
 
   t.tx_buf = vhub->transfer;
   t.len = offsetof(spi_cmd_t, data) + length; //
-  //t.delay_usecs = 200;
-  //t.cs_change_delay.unit = 0;
-  //t.cs_change_delay.value = 100;
+  t.delay_usecs = 0;
+  t.cs_change_delay.unit = 0;
+  t.cs_change_delay.value = 100;
 
   pr_hex_mark(vhub->transfer, min(64, t.len), PR_WRITE);
 
@@ -467,8 +468,8 @@ static int ast_vhub_probe(struct spi_device* spi)
     return -ENODEV;
   }
 
-  vhub->spi->master->cs_hold.unit = 0;
-  vhub->spi->master->cs_hold.value = 700;
+  //vhub->spi->master->cs_hold.unit = 0;
+  //vhub->spi->master->cs_hold.value = 700;
   //vhub->spi->master->cs_setup.unit = 0;
   //vhub->spi->master->cs_setup.value = 700;
 
@@ -555,22 +556,44 @@ static int ast_vhub_probe(struct spi_device* spi)
      }
   }
 #else
-    memset(vhub->transfer, 0x22, 32);
+    memset(vhub->transfer, 0x22, 48);
     memset(vhub->transfer+4, 0x11, 3);
     memset(vhub->transfer+(32-4), 0x33, 4);
-    for (nIndex = 1; nIndex < 45000; nIndex++)
+    u16 outidx;
+    for (outidx = 0; outidx <= 30000; outidx++)
     {
-    //get_random_bytes(&nlocCount, 2);
-    //u16 nCount = nlocCount % MAX_OUTPUT; // MAX_OUTPUT
-    //get_random_bytes(vhub->transfer, nCount);
-   //strcpy(vhub->transfer, "12345678901234567890");
-    //*((u16*)&vhub->transfer[4]) = nIndex;
-    // blocking read
-    if (!vusb_write_buffer(vhub, WRITE_CMD_WRITE | VUSB_DEVICE_PIPE_0, vhub->transfer, 38)) {
-      break;
+      for (nIndex = 1; nIndex <= 5; nIndex++)
+      {
+        get_random_bytes(&nlocCount, 2);
+        u16 nCount = nlocCount % MAX_OUTPUT; // MAX_OUTPUT
+        nCount = nCount < 4?8:8;
+        get_random_bytes(vhub->transfer, nCount);
+       //strcpy(vhub->transfer, "12345678901234567890");
+        *((u16*)&vhub->transfer[4]) = nIndex;
+        // blocking read
+        if (!vusb_write_buffer(vhub, WRITE_CMD_READ | VUSB_DEVICE_PIPE_0, vhub->transfer, nCount)) {
+          break;
+        }
+        mdelay(10);
+      }
+
+      for (nIndex = 1; nIndex <= 2; nIndex++)
+      {
+        get_random_bytes(&nlocCount, 2);
+        u16 nCount = nlocCount % MAX_OUTPUT; // MAX_OUTPUT
+        nCount = nCount < 4 ? 8 : nCount;
+        get_random_bytes(vhub->transfer, nCount);
+        //strcpy(vhub->transfer, "12345678901234567890");
+        *((u16*)&vhub->transfer[4]) = nIndex;
+        // blocking read
+        if (!vusb_write_buffer(vhub, WRITE_CMD_WRITE | VUSB_DEVICE_PIPE_0, vhub->transfer, nCount)) {
+          break;
+        }
+        mdelay(1);
+      }
+
+      //mdelay(2);
     }
-    mdelay(3);
-  }
 #endif
 
   dev_info(&spi->dev, "Succesfully written to client.\n");
