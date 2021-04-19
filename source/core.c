@@ -560,7 +560,7 @@ static int ast_vhub_probe(struct spi_device* spi)
     memset(vhub->transfer+4, 0x11, 3);
     memset(vhub->transfer+(32-4), 0x33, 4);
     u16 outidx;
-    for (outidx = 0; outidx <= 30000; outidx++)
+    for (outidx = 0; outidx <= 60000; outidx++)
     {
       //for (nIndex = 1; nIndex <= 5; nIndex++)
       //{
