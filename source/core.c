@@ -562,20 +562,20 @@ static int ast_vhub_probe(struct spi_device* spi)
     u16 outidx;
     for (outidx = 0; outidx <= 60000; outidx++)
     {
-      //for (nIndex = 1; nIndex <= 5; nIndex++)
-      //{
-      //  get_random_bytes(&nlocCount, 2);
-      //  u16 nCount = nlocCount % MAX_OUTPUT; // MAX_OUTPUT
-      //  nCount = nCount < 4?8:8;
-      //  get_random_bytes(vhub->transfer, nCount);
-      // //strcpy(vhub->transfer, "12345678901234567890");
-      //  *((u16*)&vhub->transfer[4]) = nIndex;
-      //  // blocking read
-      //  if (!vusb_write_buffer(vhub, WRITE_CMD_READ | VUSB_DEVICE_PIPE_0, vhub->transfer, nCount)) {
-      //    break;
-      //  }
-      //  mdelay(10);
-      //}
+      for (nIndex = 1; nIndex <= 1; nIndex++)
+      {
+        get_random_bytes(&nlocCount, 2);
+        u16 nCount = nlocCount % MAX_OUTPUT; // MAX_OUTPUT
+        nCount = nCount < 4?8:8;
+        get_random_bytes(vhub->transfer, nCount);
+       //strcpy(vhub->transfer, "12345678901234567890");
+        *((u16*)&vhub->transfer[4]) = nIndex;
+        // blocking read
+        if (!vusb_write_buffer(vhub, WRITE_CMD_READ | VUSB_DEVICE_PIPE_0, vhub->transfer, nCount)) {
+          break;
+        }
+        mdelay(10);
+      }
 
       for (nIndex = 1; nIndex <= 2; nIndex++)
       {
