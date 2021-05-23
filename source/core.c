@@ -242,7 +242,7 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
   return 0;
 }
 
-static int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
+int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 {
   struct spi_device* spi = vhub->spi;
   struct spi_transfer t;
@@ -285,14 +285,6 @@ static int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 leng
 
 #define GPIO_CLIENT_GPIO_IRQ 17
 
-#define VUSB_DEVICE_RESET    0x11
-#define VUSB_DEVICE_ATTACH   0x12
-#define VUSB_DEVICE_DETACH   0x13
-#define VUSB_DEVICE_MEMORY   0x14
-#define VUSB_DEVICE_HWATTACH 0x15
-
-#define WRITE_CMD_WRITE 0x80
-#define WRITE_CMD_READ  0x40
 
 static irqreturn_t ast_vhub_irq(int irq, void* data)
 {
@@ -316,9 +308,7 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
     mutex_lock(&vhub->spi_bus_mutex);
     memset(vhub->transfer, 0, 1024);
 
-#define DEBUG_SPI_CECK
 #define MAX_PRINT_COLUMN (u16)64
-#define MAX_OUTPUT 512
 #define HEADER offsetof(spi_cmd_t, data)
 
     // read
@@ -346,89 +336,6 @@ void ast_vhub_init_hw(struct ast_vhub* vhub)
 
 }
 
-#define VUSB_MAX_DEVICES 4
-static int vusb_major;
-static struct class* vusbchardev_class = NULL;
-
-typedef struct vusb_send {
-  uint8_t delay;
-  uint16_t cmd;
-  uint8_t port;
-}vusb_send_t;
-
-static int vusb_open(struct inode* inode, struct file* file)
-{
-  struct ast_vhub *vhub;
-  //printk("vusb: Device open\n");
-  vhub = container_of(inode->i_cdev, struct ast_vhub, cdev);
-  file->private_data = vhub;
-  return 0;
-}
-
-static int vusb_release(struct inode* inode, struct file* file)
-{
-  return 0;
-}
-
-static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg)
-{
-  printk("vusb: Device ioctl");
-  return 0;
-}
-
-static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff_t* offset)
-{
-  printk("vusb: Device read");
-  return 0;
-}
-
-const vusb_send_t vusb_send_tab[] = {
-    { /*delay*/ 0x40,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH, /*port*/ 1},
-    { /*delay*/ 0x10,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH, /*port*/ 1},
-    { /*delay*/ 0x10,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY, /*port*/ 1},
-};
-
-static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
-{
-  struct ast_vhub* vhub;
-  vhub = file->private_data;
-
-  size_t maxdatalen = 30, ncopied;
-  uint8_t databuf[maxdatalen];
-  if (count < maxdatalen) {
-    maxdatalen = count;
-  }
-  ncopied = copy_from_user(databuf, buf, maxdatalen);
-  databuf[maxdatalen] = 0;
-
-  printk("cmd: %s", databuf);
-  if (databuf[0] == 'a')
-  {
-    memset(vhub->transfer, 0x00, 4);
-    vusb_write_buffer(vhub, vusb_send_tab[1].cmd, vhub->transfer, 4);
-  }
-  if (databuf[0] == 'm')
-  {
-    memset(vhub->transfer + 4, 0x33, 3);
-    vusb_write_buffer(vhub, vusb_send_tab[2].cmd, vhub->transfer, 4);
-  }
-  return count;
-
-}
-
-static int vusbchardev_uevent(struct device* dev, struct kobj_uevent_env* env)
-{
-  add_uevent_var(env, "DEVMODE=%#o", 0666);
-  return 0;
-}
-
-static const struct file_operations vusb_ops = {
-  .owner = THIS_MODULE,
-  .write = vusb_write,
-  .read = vusb_read,
-  .open = vusb_open,
-};
-
 static int ast_vhub_remove(struct spi_device* spi)
 {
   struct ast_vhub* vhub = spi_get_drvdata(spi);
@@ -452,20 +359,23 @@ static int ast_vhub_remove(struct spi_device* spi)
 
   // remove the char device
 
-  device_destroy(vusbchardev_class, MKDEV(vusb_major, 1));
-  class_unregister(vusbchardev_class);
-  class_destroy(vusbchardev_class);
+  device_destroy(vhub->chardev_class, MKDEV(vhub->crdev_major, 1));
+  class_unregister(vhub->chardev_class);
+  class_destroy(vhub->chardev_class);
 
-  dev_t dev_id = MKDEV(vusb_major, 0);
+  dev_t dev_id = MKDEV(vhub->crdev_major, 0);
 
   cdev_del(&vhub->cdev);
-  unregister_chrdev_region(dev_id, VUSB_MAX_DEVICES);
+  unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
 
   spin_lock_irqsave(&vhub->lock, flags);
   spin_unlock_irqrestore(&vhub->lock, flags);
 
   return 0;
 }
+
+extern const struct file_operations vusb_ops;
+int vusbchardev_uevent(struct device* dev, struct kobj_uevent_env* env);
 
 static int ast_vhub_probe(struct spi_device* spi)
 {
@@ -592,19 +502,19 @@ static int ast_vhub_probe(struct spi_device* spi)
 
   // char device
   dev_t usrdev;
-  alloc_chrdev_region(&usrdev, 0, VUSB_MAX_DEVICES, "vusb");
-  vusb_major = MAJOR(usrdev);
+  alloc_chrdev_region(&usrdev, 0, VUSB_MAX_CHAR_DEVICES, "vusb");
+  vhub->crdev_major = MAJOR(usrdev);
   cdev_init(&vhub->cdev, &vusb_ops);
  
-  rc = cdev_add(&vhub->cdev, usrdev, VUSB_MAX_DEVICES);
+  rc = cdev_add(&vhub->cdev, usrdev, VUSB_MAX_CHAR_DEVICES);
   if (rc < 0) {
     pr_warn("Couldn't cdev_add\n");
     goto err;
   }
-  vusbchardev_class = class_create(THIS_MODULE, "vusb");
-  vusbchardev_class->dev_uevent = vusbchardev_uevent;
+  vhub->chardev_class = class_create(THIS_MODULE, "vusb");
+  vhub->chardev_class->dev_uevent = vusbchardev_uevent;
 
-  device_create(vusbchardev_class, NULL, MKDEV(vusb_major, 1), NULL, "vusb-%d", 1);
+  device_create(vhub->chardev_class, NULL, MKDEV(vhub->crdev_major, 1), NULL, "vusb-%d", 1);
 
   dev_info(&spi->dev, "Succesfully initialized vhub.\n");
   return 0;
