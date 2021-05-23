@@ -403,6 +403,9 @@ struct ast_vhub_full_cdesc {
 /* Global vhub structure */
 struct ast_vhub {
 
+  /* char device */
+  struct cdev cdev;
+
     /* SPI master */
 	struct spi_device *spi;
 	u8 *transfer;
