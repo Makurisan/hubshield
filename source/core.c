@@ -331,46 +331,6 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
     else {
       UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", 0, irq);
     }
-
-
-#ifdef _DEBUG_SPI_CECK
-    //// read
-    //if (vusb_read_buffer(vhub, vhub->transfer, 1024)) {
-    //
-    //  spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-    //// print the whole buffer
-    //  pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-
-    //  // create random write buffer
-    //  u16 nlocCount = 0;
-    //  get_random_bytes(&nlocCount, 2);
-    //  u16 nCount = nlocCount % MAX_OUTPUT;
-    //  //nCount = min(MAX_OUTPUT, nCount);
-    //  get_random_bytes(&vhub->transfer[4], nCount);
-    //  // write
-    //  //UDCVDBG(vhub, "ast_vhub_irq spi write count: %d, hex:%04x, t.len:%d\n", nCount, nlocCount, 0);
-    //  if (vusb_write_buffer(vhub, WRITE_CMD_WRITE | VUSB_DEVICE_PIPE_0, vhub->transfer, nCount)) {
-    //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, nCount + HEADER), PR_WRITE);
-
-    //    u8 length = 1; u8 i;
-    //    for (i = 0; i < length; i++)
-    //    {
-    //      // // blocking read
-    //      // if (vusb_write_buffer(vhub, WRITE_CMD_READ | DEVICE_PIPE_0, vhub->transfer, nCount)) {
-    //        // pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, nCount + HEADER), PR_WRITE);
-    //      // }
-    //    }
-    //  }
-    //  else {
-    //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, nCount + HEADER), PR_WRITE | PR_ERROR);
-    //  }
-    //}
-    //else {
-    //  UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value*:%d \n", 0, irq);
-    //}
-
-#endif // DEBUG
-
     mutex_unlock(&vhub->spi_bus_mutex);
   }
 
