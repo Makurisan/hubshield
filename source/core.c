@@ -515,7 +515,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->chardev_class->dev_uevent = vusbchardev_uevent;
 
   device_create(vhub->chardev_class, NULL, MKDEV(vhub->crdev_major, 1), NULL, "vusb-%d", 1);
-
+ 
   dev_info(&spi->dev, "Succesfully initialized vhub.\n");
   return 0;
 

@@ -218,7 +218,7 @@
 					 * values are 256 and 32)
 					 */
 
-#define VUSB_MAX_CHAR_DEVICES 2
+#define VUSB_MAX_CHAR_DEVICES 3
 
 struct ast_vhub;
 struct ast_vhub_dev;

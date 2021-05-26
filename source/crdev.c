@@ -42,8 +42,9 @@
 #define WRITE_CMD_READ  0x40
 
 typedef struct vusb_send {
-  uint8_t delay;
+  uint8_t chr[4]; 
   uint16_t cmd;
+  uint8_t cmdst[0x40];
   uint8_t port;
 }vusb_send_t;
 
@@ -57,15 +58,23 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length);
 
 const struct file_operations vusb_ops = {
   .owner = THIS_MODULE,
+  .open = vusb_open,
   .write = vusb_write,
   .read = vusb_read,
-  .open = vusb_open,
+};
+
+const vusb_send_t vusb_send_tab[] = {
+    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH,  ", /*port*/ 1},
+    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY,  ", /*port*/ 1},
+    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH,", /*hub*/ 0},
+    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET,   ", /*hub*/ 0},
+    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH,  ", /*port*/ 1},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)
 {
   struct ast_vhub* vhub;
-  //printk("vusb: Device open\n");
+  printk("vusb: Device open with %d possible cmds\n", sizeof(vusb_send_tab) / sizeof(vusb_send_t));
   vhub = container_of(inode->i_cdev, struct ast_vhub, cdev);
   file->private_data = vhub;
   return 0;
@@ -88,13 +97,6 @@ static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff
   return 0;
 }
 
-const vusb_send_t vusb_send_tab[] = {
-    { /*delay*/ 0x40,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH, /*port*/ 1},
-    { /*delay*/ 0x10,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH, /*port*/ 1},
-    { /*delay*/ 0x10,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   /*port*/ 1},
-    { /*delay*/ 0x10,   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, /*hub*/ 0},
-};
-
 static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
 {
   struct ast_vhub* vhub;
@@ -109,26 +111,19 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
   databuf[maxdatalen] = 0;
 
   printk("cmd: %s", databuf);
-  if (databuf[0] == 'a')
-  {
-    memset(vhub->transfer, 0x00, 4);
-    vusb_write_buffer(vhub, vusb_send_tab[1].cmd, vhub->transfer, 4);
+  size_t i, j;
+  for (i=0; i < strlen(databuf); i++) {
+    for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
+      if (strncasecmp(&databuf[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
+        printk(": %s", vusb_send_tab[j].cmdst);
+        memset(vhub->transfer, 0x00, 4);
+        vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, 4);
+        msleep(200);
+      }
+    }
   }
-  if (databuf[0] == 'm')
-  {
-    memset(vhub->transfer + 4, 0x33, 3);
-    vusb_write_buffer(vhub, vusb_send_tab[2].cmd, vhub->transfer, 4);
-  }
-  if (databuf[0] == 'm')
-  {
-    memset(vhub->transfer + 4, 0x33, 3);
-    vusb_write_buffer(vhub, vusb_send_tab[2].cmd, vhub->transfer, 4);
-  }
-
-  
 
   return count;
-
 }
 
 int vusbchardev_uevent(struct device* dev, struct kobj_uevent_env* env)
