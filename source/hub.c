@@ -512,7 +512,7 @@ static void ast_vhub_change_port_stat(struct ast_vhub *vhub,
 static void ast_vhub_send_host_wakeup(struct ast_vhub *vhub)
 {
 	// u32 reg = readl(vhub->regs + AST_VHUB_CTRL);
-	UDCDBG(vhub, "Waking up host !\n");
+	UDCDBG(vhub, "ast_vhub_send_host_wakeup Waking up host !\n");
 	// reg |= VHUB_CTRL_MANUAL_REMOTE_WAKEUP;
 	// writel(reg, vhub->regs + AST_VHUB_CTRL);
 }
@@ -520,7 +520,7 @@ static void ast_vhub_send_host_wakeup(struct ast_vhub *vhub)
 void ast_vhub_device_connect(struct ast_vhub *vhub,
 			     unsigned int port, bool on)
 {
-	UDCDBG(vhub, "ast_vhub_device_connect(%d/%d)\n", on, vhub->wakeup_en);
+	UDCDBG(vhub, "port%d ast_vhub_device_connect(on:%d/w_en:%d)\n", port, on, vhub->wakeup_en);
 
 	if (on) {
 		ast_vhub_change_port_stat(vhub, port, 0,

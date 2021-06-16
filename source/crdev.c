@@ -64,11 +64,11 @@ const struct file_operations vusb_ops = {
 };
 
 const vusb_send_t vusb_send_tab[] = {
-    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH,  ", /*port*/ 1},
-    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY,  ", /*port*/ 1},
+    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH,  ", /*port*/1},
+    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY,  ", /*port*/1},
     { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH,", /*hub*/ 0},
     { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET,   ", /*hub*/ 0},
-    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH,  ", /*port*/ 1},
+    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH,  ", /*port*/1},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)

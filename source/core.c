@@ -343,8 +343,9 @@ static int ast_vhub_remove(struct spi_device* spi)
   unsigned long flags;
   int i;
 
-  if (!vhub)
+  if (!vhub) {
     return 0;
+  }
 
   dev_info(&spi->dev, "Remove of v-hub.\n");
 
@@ -358,15 +359,17 @@ static int ast_vhub_remove(struct spi_device* spi)
   }
 
   // remove the char device
-
   device_destroy(vhub->chardev_class, MKDEV(vhub->crdev_major, 1));
-  class_unregister(vhub->chardev_class);
   class_destroy(vhub->chardev_class);
 
-  dev_t dev_id = MKDEV(vhub->crdev_major, 0);
+  //class_unregister(vhub->chardev_class);
+  //dev_info(&spi->dev, "- 4 v-hub.\n");
 
+  dev_t dev_id = MKDEV(vhub->crdev_major, 0);
   cdev_del(&vhub->cdev);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
+
+  dev_info(&spi->dev, "Char device from v-hub removed.\n");
 
   spin_lock_irqsave(&vhub->lock, flags);
   spin_unlock_irqrestore(&vhub->lock, flags);
@@ -404,7 +407,7 @@ static int ast_vhub_probe(struct spi_device* spi)
 
   dev_info(&spi->dev, "Hub device has initiated %d hub ports.\n", vhub->max_ports);
 
-  rc = of_property_read_u32(np, "hubshield,eps", &vhub->max_epns);
+  rc = of_property_read_u32(np, "endpoints", &vhub->max_epns);
   vhub->epns = devm_kcalloc(&spi->dev, vhub->max_epns,
     sizeof(*vhub->epns), GFP_KERNEL);
   if (!vhub->epns)
@@ -412,6 +415,7 @@ static int ast_vhub_probe(struct spi_device* spi)
     dev_err(&spi->dev, "Unable to allocate Hub endpoints.\n");
     return -ENOMEM;
   }
+  dev_info(&spi->dev, "Hub device has %d eps.\n", vhub->max_epns);
 
   vhub->transfer = devm_kcalloc(&spi->dev, 1024,
     sizeof(*vhub->transfer), GFP_KERNEL);

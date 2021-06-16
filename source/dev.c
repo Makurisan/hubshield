@@ -319,13 +319,10 @@ static int ast_vhub_udc_pullup(struct usb_gadget* gadget, int on)
 
 	DDBG(d, "ast_vhub_udc_pullup(%d)\n", on);
 
-	// spin_lock_irqsave(&d->vhub->lock, flags);
+	spin_lock_irqsave(&d->vhub->lock, flags);
 
 	/* Mark disconnected in the hub */
 	ast_vhub_device_connect(d->vhub, d->index, on);
-
-	// dev_get_drvdata(&gadget->dev);
-	// spi_set_drvdata(spi, vhub);
 
 	/*
 	 * If enabled, nuke all requests if any (there shouldn't be)
@@ -336,7 +333,7 @@ static int ast_vhub_udc_pullup(struct usb_gadget* gadget, int on)
 		ast_vhub_dev_disable(d);
 	}
 
-	// spin_unlock_irqrestore(&d->vhub->lock, flags);
+	spin_unlock_irqrestore(&d->vhub->lock, flags);
 
 	return 0;
 }
@@ -383,7 +380,7 @@ static struct usb_ep *ast_vhub_udc_match_ep(struct usb_gadget *gadget,
 			     to_ast_ep(u_ep)->d_idx);
 			return u_ep;
 		}
-	}
+  }
 
 	/*
 	 * We didn't find one, we need to grab one from the pool.
@@ -439,8 +436,8 @@ static struct usb_ep *ast_vhub_udc_match_ep(struct usb_gadget *gadget,
 	ep = ast_vhub_alloc_epn(d, addr);
 	if (!ep)
 		return NULL;
-	DDBG(d, "Allocated epn#%d for port EP%d\n",
-	     ep->epn.g_idx, addr);
+
+	DDBG(d, "Allocated epn#%d for port EP%d\n", ep->epn.g_idx, addr);
 
 	return &ep->ep;
 }
@@ -452,7 +449,7 @@ static int ast_vhub_udc_stop(struct usb_gadget *gadget)
 
 	spin_lock_irqsave(&d->vhub->lock, flags);
 
-	DDBG(d, "stop\n");
+	DDBG(d, "ast_vhub_udc_stop\n");
 
 	d->driver = NULL;
 	d->gadget.speed = USB_SPEED_UNKNOWN;

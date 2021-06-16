@@ -776,12 +776,12 @@ static void ast_vhub_epn_dispose(struct usb_ep *u_ep)
 	ep->dev->epns[ep->d_idx - 1] = NULL;
 
 	/* Free name & DMA buffers */
-	kfree(ep->ep.name);
+  kfree(ep->ep.name);
 	ep->ep.name = NULL;
-	dma_free_coherent(&ep->vhub->spi->dev,
-			  AST_VHUB_EPn_MAX_PACKET +
-			  8 * AST_VHUB_DESCS_COUNT,
-			  ep->buf, ep->buf_dma);
+	//dma_free_coherent(&ep->vhub->spi->dev,
+	//		  AST_VHUB_EPn_MAX_PACKET +
+	//		  8 * AST_VHUB_DESCS_COUNT,
+	//		  ep->buf, ep->buf_dma);
 	ep->buf = NULL;
 	ep->epn.descs = NULL;
 
