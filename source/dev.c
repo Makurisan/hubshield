@@ -220,6 +220,12 @@ int ast_vhub_std_dev_request(struct ast_vhub_ep *ep,
 
 	DDBG(d, "ast_vhub_std_dev_request\n");
 
+
+  DDBG(d,
+    "%s crq_request : bRequestType:0x%x bRequest:0x%x Value:0x%x\n",
+    __func__, crq->bRequestType, crq->bRequest, value);
+
+
 	/* No driver, we shouldn't be enabled ... */
 	if (!d->driver || !d->enabled) {
 		EPDBG(ep,

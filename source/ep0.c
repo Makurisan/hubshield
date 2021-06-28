@@ -131,7 +131,7 @@ void ast_vhub_ep0_handle_setup(struct ast_vhub_ep *ep)
 
 	/* If this is the vHub, we handle requests differently */
 	std_req_rc = std_req_driver;
-/* 	if (ep->dev == NULL) {
+ 	if (ep->dev == NULL) {
 
 		EPDBG(ep, "ast_vhub_ep0_handle_setup If this is the vHub, we handle requests differently\n");
 
@@ -143,7 +143,7 @@ void ast_vhub_ep0_handle_setup(struct ast_vhub_ep *ep)
 			std_req_rc = std_req_stall;
 	} else if ((crq.bRequestType & USB_TYPE_MASK) == USB_TYPE_STANDARD)
 		std_req_rc = ast_vhub_std_dev_request(ep, &crq);
- */
+
 	// Act upon result
 	switch(std_req_rc) {
 	case std_req_complete:
