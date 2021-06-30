@@ -286,10 +286,19 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 
 #define GPIO_CLIENT_GPIO_IRQ 5
 
-
-static irqreturn_t ast_vhub_irq(int irq, void* data)
+static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 {
-  struct ast_vhub* vhub = data;
+  struct ast_vhub* vhub = dev_id;
+
+  if (vhub->irq != irq)
+    return IRQ_NONE;
+
+  return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
+{
+  struct ast_vhub* vhub = dev_id;
   irqreturn_t iret = IRQ_NONE;
   u32 i, istat;
   unsigned long flags;
@@ -300,19 +309,21 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
 
   iret = IRQ_HANDLED;
 
-  #define GPIO_PERI_BASE_RP3 0x3F000000  // bcm2837
+  #define GPIO_PERI_BASE_RP3 0x3F000000  // BCM2835 
   #define GPIO_PERI_BASE_RP4  0xFE000000 // bcm2711
+  #define CORE0_IRQ_SOURCE 0x40000060
 
-  #define IRQ_PENDING_1		(GPIO_PERI_BASE_RP3+0x0000B204)
-  void __iomem* regs = ioremap(IRQ_PENDING_1, 4);
-  // read pending interrupt irq
-  u32 reg = ioread32(regs);
-  iounmap(regs);
+  //#define IRQ_PENDING_1		(GPIO_PERI_BASE_RP3+0x0000B204)
+  //void __iomem* regs = ioremap(IRQ_PENDING_1, 4);
+  //// read pending interrupt irq
+  //u32 reg = ioread32(regs);
+  //iounmap(regs);
 
   // no pending irq
-  if (!reg)
-    return iret;
-  UDCVDBG(vhub, "ast_vhub_irq\n");
+  //if (!reg)
+  //  return iret;
+  //UDCVDBG(vhub, "ast_vhub_irq\n");
+  UDCVDBG(vhub, "ast_vhub_irq spi error with pending buffer:%x, irq:%d \n", 0, irq);
 
   if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
   {
@@ -474,10 +485,11 @@ static int ast_vhub_probe(struct spi_device* spi)
   rc = of_property_read_u32(np, "reset-gpios", &vhub->reset_gpio);
   dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
 
+  dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ, gpio_to_irq(GPIO_CLIENT_GPIO_IRQ));
+  dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ+1, gpio_to_irq(GPIO_CLIENT_GPIO_IRQ+1));
   // set the irq handler: list with "cat /proc/interrupts"
-  dev_info(&vhub->spi->dev, "Threaded irq at %d.\n", vhub->irq);
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq,
-    NULL, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND, "vusbsoc", vhub);
+    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_SHARED | /*IRQF_ONESHOT | */IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request interrupt\n");
