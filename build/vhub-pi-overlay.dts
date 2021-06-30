@@ -29,8 +29,8 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
-				interrupts = <5 2 19 2>; /* IRQ_TYPE_EDGE_FALLING */
-				reset-gpios = <&gpio 6 1>; // GPIO_ACTIVE_HIGH
+				interrupts = <5 2 6 2>; /* IRQ_TYPE_EDGE_FALLING */
+				reset-gpios = <&gpio 24 1>; // GPIO_ACTIVE_HIGH
 				max-ports = <5>; // count of virtual hub ports
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
@@ -43,7 +43,7 @@
 		target = <&gpio>;
 		__overlay__ {
 			vhub_pins: vhub_pins {
-				brcm,pins = <5 6 19>;	// irq, dtrdy, reset   		
+				brcm,pins = <5 6 24>;	// irq, dtrdy, reset   		
 				brcm,function = <0 1 0>; // input, output
 				brcm,pull = <1 0 1>;     // down, none
 			};

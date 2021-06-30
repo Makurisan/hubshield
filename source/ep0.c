@@ -92,6 +92,7 @@ void ast_vhub_ep0_handle_setup(struct ast_vhub_ep *ep)
 
 	if (WARN_ON(ep->d_idx != 0))
 		return;
+  return;
 
 	/*
 	 * Grab the setup packet from the chip and byteswap

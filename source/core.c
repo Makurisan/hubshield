@@ -33,6 +33,7 @@
 #include <linux/random.h>
 #include <linux/crc8.h>
 #include <linux/fs.h>
+#include <linux/irq.h>
 
 #include "vhub.h"
 
@@ -283,7 +284,7 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   return !spi_sync(spi, &msg);
 }
 
-#define GPIO_CLIENT_GPIO_IRQ 17
+#define GPIO_CLIENT_GPIO_IRQ 5
 
 
 static irqreturn_t ast_vhub_irq(int irq, void* data)
@@ -292,13 +293,27 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
   irqreturn_t iret = IRQ_NONE;
   u32 i, istat;
   unsigned long flags;
-  // UDCVDBG(vhub, "ast_vhub_irq\n");
 
   /* Stale interrupt while tearing down */
   if (vhub->irq != irq)
     return IRQ_NONE;
 
   iret = IRQ_HANDLED;
+
+  #define GPIO_PERI_BASE_RP3 0x3F000000  // bcm2837
+  #define GPIO_PERI_BASE_RP4  0xFE000000 // bcm2711
+
+  #define IRQ_PENDING_1		(GPIO_PERI_BASE_RP3+0x0000B204)
+  void __iomem* regs = ioremap(IRQ_PENDING_1, 4);
+  // read pending interrupt irq
+  u32 reg = ioread32(regs);
+  iounmap(regs);
+
+  // no pending irq
+  if (!reg)
+    return iret;
+  UDCVDBG(vhub, "ast_vhub_irq\n");
+
   if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
   {
     UDCVDBG(vhub, "ast_vhub_irq GPIO rising status irq:%d, value*:%d \n", irq, 0);
@@ -308,19 +323,19 @@ static irqreturn_t ast_vhub_irq(int irq, void* data)
     mutex_lock(&vhub->spi_bus_mutex);
     memset(vhub->transfer, 0, 1024);
 
-#define MAX_PRINT_COLUMN (u16)64
-#define HEADER offsetof(spi_cmd_t, data)
-
-    // read
-    if (vusb_read_buffer(vhub, vhub->transfer, 1024)) {
-
-      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-      // print the whole buffer
-      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-    }
-    else {
-      UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", 0, irq);
-    }
+//#define MAX_PRINT_COLUMN (u16)64
+//#define HEADER offsetof(spi_cmd_t, data)
+//
+//    // read
+//    if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
+//
+//      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+//      // print the whole buffer
+//      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+//    }
+//    else {
+//      UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", reg, irq);
+//    }
     mutex_unlock(&vhub->spi_bus_mutex);
   }
 
@@ -459,7 +474,8 @@ static int ast_vhub_probe(struct spi_device* spi)
   rc = of_property_read_u32(np, "reset-gpios", &vhub->reset_gpio);
   dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
 
-  // set the irq handler
+  // set the irq handler: list with "cat /proc/interrupts"
+  dev_info(&vhub->spi->dev, "Threaded irq at %d.\n", vhub->irq);
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq,
     NULL, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)

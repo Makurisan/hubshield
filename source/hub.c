@@ -527,9 +527,6 @@ void ast_vhub_device_connect(struct ast_vhub *vhub,
 								  USB_PORT_STAT_CONNECTION, true);
 		ast_vhub_dev_reset(&vhub->ports[port].dev);
 		ast_vhub_ep0_handle_setup(&vhub->ports[port].dev.ep0);
-
-    UDCDBG(vhub, "ast_vhub_ep0_handle_setup done----------\n");
-
 	}
 	else
 		ast_vhub_change_port_stat(vhub, port,
@@ -541,8 +538,8 @@ void ast_vhub_device_connect(struct ast_vhub *vhub,
 	 * If the hub is set to wakup the host on connection events
 	 * then send a wakeup.
 	 */
-	if (vhub->wakeup_en)
-		ast_vhub_send_host_wakeup(vhub);
+	//if (vhub->wakeup_en)
+	//	ast_vhub_send_host_wakeup(vhub);
 
 }
 

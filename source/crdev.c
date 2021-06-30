@@ -32,11 +32,12 @@
 
 #include "vhub.h"
 
-#define VUSB_DEVICE_RESET    0x11
-#define VUSB_DEVICE_ATTACH   0x12
-#define VUSB_DEVICE_DETACH   0x13
-#define VUSB_DEVICE_MEMORY   0x14
-#define VUSB_DEVICE_HWATTACH 0x15
+#define VUSB_DEVICE_PING      0x11
+#define VUSB_DEVICE_RESET     0x12
+#define VUSB_DEVICE_ATTACH    0x13
+#define VUSB_DEVICE_DETACH    0x14
+#define VUSB_DEVICE_MEMORY    0x15
+#define VUSB_DEVICE_HWATTACH  0x16
 
 #define WRITE_CMD_WRITE 0x80
 #define WRITE_CMD_READ  0x40
@@ -64,11 +65,13 @@ const struct file_operations vusb_ops = {
 };
 
 const vusb_send_t vusb_send_tab[] = {
-    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH,  ", /*port*/1},
-    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY,  ", /*port*/1},
-    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH,", /*hub*/ 0},
-    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET,   ", /*hub*/ 0},
-    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH,  ", /*port*/1},
+    { "p",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0},
+    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1},
+    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1},
+    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0},
+    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0},
+    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1},
+    { "c",   /*cmd*/ WRITE_CMD_READ  | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_READ",    /*port*/0},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)
