@@ -229,25 +229,25 @@ static int ast_vhub_hub_ep_feature(struct ast_vhub_ep *ep,
 	EPDBG(ep, "%s_FEATURE(ep%d val=%02x)\n",
 	      is_set ? "SET" : "CLEAR", ep_num, wValue);
 
-	if (ep_num > 1)
-		return std_req_stall;
-	if (wValue != USB_ENDPOINT_HALT)
-		return std_req_stall;
-	if (ep_num == 0)
-		return std_req_complete;
+	//if (ep_num > 1)
+	//	return std_req_stall;
+	//if (wValue != USB_ENDPOINT_HALT)
+	//	return std_req_stall;
+	//if (ep_num == 0)
+	//	return std_req_complete;
 
-	EPDBG(ep, "%s stall on EP 1\n",
-	      is_set ? "setting" : "clearing");
+	//EPDBG(ep, "%s stall on EP 1\n",
+	//      is_set ? "setting" : "clearing");
 
-	ep->vhub->ep1_stalled = is_set;
-	reg = readl(ep->vhub->regs + AST_VHUB_EP1_CTRL);
-	if (is_set) {
-		reg |= VHUB_EP1_CTRL_STALL;
-	} else {
-		reg &= ~VHUB_EP1_CTRL_STALL;
-		reg |= VHUB_EP1_CTRL_RESET_TOGGLE;
-	}
-	writel(reg, ep->vhub->regs + AST_VHUB_EP1_CTRL);
+	//ep->vhub->ep1_stalled = is_set;
+	//reg = readl(ep->vhub->regs + AST_VHUB_EP1_CTRL);
+	//if (is_set) {
+	//	reg |= VHUB_EP1_CTRL_STALL;
+	//} else {
+	//	reg &= ~VHUB_EP1_CTRL_STALL;
+	//	reg |= VHUB_EP1_CTRL_RESET_TOGGLE;
+	//}
+	//writel(reg, ep->vhub->regs + AST_VHUB_EP1_CTRL);
 
 	return std_req_complete;
 }
@@ -387,16 +387,17 @@ enum std_req_rc ast_vhub_std_hub_request(struct ast_vhub_ep *ep,
 	EPDBG(ep, "ast_vhub_std_hub_request %x\n", wValue);
 	return std_req_stall;
 
-	/* First packet, grab speed */
-	if (vhub->speed == USB_SPEED_UNKNOWN) {
-		u32 ustat = readl(vhub->regs + AST_VHUB_USBSTS);
-		if (ustat & VHUB_USBSTS_HISPEED)
-			vhub->speed = USB_SPEED_HIGH;
-		else
-			vhub->speed = USB_SPEED_FULL;
-		UDCDBG(vhub, "USB status=%08x speed=%s\n", ustat,
-		       vhub->speed == USB_SPEED_HIGH ? "high" : "full");
-	}
+	///* First packet, grab speed */
+	//if (vhub->speed == USB_SPEED_UNKNOWN) {
+	//	u32 ustat = readl(vhub->regs + AST_VHUB_USBSTS);
+	//	if (ustat & VHUB_USBSTS_HISPEED)
+	//		vhub->speed = USB_SPEED_HIGH;
+	//	else
+	//		vhub->speed = USB_SPEED_FULL;
+	//	UDCDBG(vhub, "USB status=%08x speed=%s\n", ustat,
+	//	       vhub->speed == USB_SPEED_HIGH ? "high" : "full");
+	//}
+  vhub->speed = USB_SPEED_FULL;
 
 	switch ((crq->bRequestType << 8) | crq->bRequest) {
 		/* SET_ADDRESS */

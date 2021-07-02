@@ -413,10 +413,15 @@ struct ast_vhub {
     /* SPI master */
 	struct spi_device *spi;
 	u8 *transfer;
+  void __iomem* regs;
 
-	void __iomem			*regs;
-	int gpio_irq;
+  void __iomem* ctrl_irq;
+  void __iomem* gpio_5;
+  int gpio_irq;
 	int irq;
+  int irq_datrdy;
+  struct gpio_desc* gpiod_reset;
+
 	spinlock_t lock;
 	struct mutex spi_bus_mutex;
 	struct work_struct		wake_work;
@@ -435,7 +440,6 @@ struct ast_vhub {
 	/* Per-port info */
 	struct ast_vhub_port		*ports;
   u32				max_ports;
-  u32				reset_gpio;
   u32				port_irq_mask;
 
 	/* Generic EP data structures */

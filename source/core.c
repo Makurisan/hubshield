@@ -34,7 +34,6 @@
 #include <linux/crc8.h>
 #include <linux/fs.h>
 #include <linux/irq.h>
-
 #include "vhub.h"
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
@@ -193,8 +192,6 @@ void ast_vhub_free_request(struct usb_ep* u_ep, struct usb_request* u_req)
   kfree(req);
 }
 
-static DECLARE_WAIT_QUEUE_HEAD(wq);
-static int flag = 0;
 static int value= 0;
 
 // read the data from the SIE
@@ -224,16 +221,16 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
     spi_message_init(&m);
     // data
     tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
+    cmd->length = length;
     if (cmd->length < 1024)
     {
       tr.len = cmd->length;
       spi_message_add_tail(&tr, &m);
-      if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8) { 
-        //
-      //  UDCVDBG(vhub, "vusb_read_buffer back from event wait: %02d, flag: %d, value:%d\n", cmd->length, flag, value);
-        flag = 1; 
-        wake_up_interruptible(&wq);
+      if (!spi_sync(spi, &m) /*&& crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8*/) { 
         return 1;
+      }
+      else {
+        UDCVDBG(vhub, "vusb_read_buffer spi_sync error!\n");
       }
     }
     else {
@@ -272,85 +269,102 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 
   spi_message_add_tail(&t, &msg);
 
-  UDCVDBG(vhub, "ast_vhub_irq spi write count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
-
   if (cmd->reg.bit.read) {
+    UDCVDBG(vhub, "ast_vhub_irq spi write(read) count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
     spi_sync(spi, &msg);
-    flag = 0;
-    wait_event_interruptible_timeout(wq, flag != 0, 800);
-    flag = 0;
     return 1;
   }
+  UDCVDBG(vhub, "ast_vhub_irq spi write count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
   return !spi_sync(spi, &msg);
 }
 
 #define GPIO_CLIENT_GPIO_IRQ 5
+#define RPI3
+
+#if defined( RPI0 ) || defined( RPI1 )
+  #define GPIO_BASE       0x20200000UL
+#elif defined( RPI2 ) || defined( RPI3 )
+  #define GPIO_BASE       0x3F200000UL
+#elif defined( RPI4 )
+  /* This comes from the linux source code:
+     https://github.com/raspberrypi/linux/blob/rpi-4.19.y/arch/arm/boot/dts/bcm2838.dtsi */
+  #define GPIO_BASE       0xFE200000UL
+#else
+  #error Unknown RPI Model!
+#endif
+
+#define BCM2837_PERIPHERALS_BASE 0x7E00B000
+#define BCM2837_INTERRUPT_REGS_BASE BCM2837_PERIPHERALS_BASE
+
+/** @brief The interrupt controller memory mapped register set */
+typedef struct {
+  volatile uint32_t IRQ_basic_pending; // 0x200
+  volatile uint32_t IRQ_pending_1;     // 0x204
+  volatile uint32_t IRQ_pending_2;     // ... 
+  volatile uint32_t FIQ_control;
+  volatile uint32_t Enable_IRQs_1;
+  volatile uint32_t Enable_IRQs_2;
+  volatile uint32_t Enable_Basic_IRQs;
+  volatile uint32_t Disable_IRQs_1;
+  volatile uint32_t Disable_IRQs_2;
+  volatile uint32_t Disable_Basic_IRQs;
+} rpi_irq_controller_t;
+
+static rpi_irq_controller_t* rpiIRQController =
+(rpi_irq_controller_t*)BCM2837_INTERRUPT_REGS_BASE;
 
 static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
 
-  if (vhub->irq != irq)
+/* Stale interrupt while tearing down */
+  if (vhub->irq_datrdy != irq)
     return IRQ_NONE;
+
+  u32 reg = readl(vhub->ctrl_irq);
+  UDCVDBG(vhub, "ast_vhub_irq_handler vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
 
   return IRQ_WAKE_THREAD;
 }
+static u16 gpio_5 = 1;
+
 
 static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
   irqreturn_t iret = IRQ_NONE;
-  u32 i, istat;
-  unsigned long flags;
-
-  /* Stale interrupt while tearing down */
-  if (vhub->irq != irq)
-    return IRQ_NONE;
 
   iret = IRQ_HANDLED;
 
-  #define GPIO_PERI_BASE_RP3 0x3F000000  // BCM2835 
-  #define GPIO_PERI_BASE_RP4  0xFE000000 // bcm2711
-  #define CORE0_IRQ_SOURCE 0x40000060
+  int cpu = smp_processor_id();
 
-  //#define IRQ_PENDING_1		(GPIO_PERI_BASE_RP3+0x0000B204)
-  //void __iomem* regs = ioremap(IRQ_PENDING_1, 4);
-  //// read pending interrupt irq
-  //u32 reg = ioread32(regs);
-  //iounmap(regs);
+  u32 reg = readl(vhub->ctrl_irq + 4);
+  UDCVDBG(vhub, "ast_vhub_irq         vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
 
-  // no pending irq
-  //if (!reg)
-  //  return iret;
-  //UDCVDBG(vhub, "ast_vhub_irq\n");
-  UDCVDBG(vhub, "ast_vhub_irq spi error with pending buffer:%x, irq:%d \n", 0, irq);
+  UDCVDBG(vhub, "ast_vhub_irq  vrt:%x, gpio:%x, gpio_val:%d\n", vhub->gpio_5 , readl(vhub->gpio_5),
+           gpio_get_value(GPIO_CLIENT_GPIO_IRQ));
 
-  if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
+/*  if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
   {
-    UDCVDBG(vhub, "ast_vhub_irq GPIO rising status irq:%d, value*:%d \n", irq, 0);
+    UDCVDBG(vhub, "ast_vhub_irq GPIO high status irq:%d\n", irq);
   }
-  else {
+  else */
+  {
 
-    mutex_lock(&vhub->spi_bus_mutex);
-    memset(vhub->transfer, 0, 1024);
+  //  memset(vhub->transfer, 0, 1024);
 
-//#define MAX_PRINT_COLUMN (u16)64
-//#define HEADER offsetof(spi_cmd_t, data)
-//
-//    // read
-//    if (vusb_read_buffer(vhub, vhub->transfer, 512)) {
-//
-//      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-//      // print the whole buffer
-//      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-//    }
-//    else {
-//      UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", reg, irq);
-//    }
-    mutex_unlock(&vhub->spi_bus_mutex);
+  //  // read
+  //  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
+  //    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+  //    // print the whole buffer
+  //#define MAX_PRINT_COLUMN (u16)32
+  //#define HEADER offsetof(spi_cmd_t, data)
+  //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+  //  }
+  //  else {
+  //    UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", 0, irq);
+  //  }
   }
-
-bail:
   return iret;
 }
 
@@ -376,7 +390,7 @@ static int ast_vhub_remove(struct spi_device* spi)
   dev_info(&spi->dev, "Remove of v-hub.\n");
 
   /* disable the slave IRQ line */
-  disable_irq(vhub->irq);
+  disable_irq(vhub->gpio_irq);
 
   /* Remove devices */
   for (i = 0; i < vhub->max_ports; i++) {
@@ -399,6 +413,8 @@ static int ast_vhub_remove(struct spi_device* spi)
 
   spin_lock_irqsave(&vhub->lock, flags);
   spin_unlock_irqrestore(&vhub->lock, flags);
+
+  iounmap(vhub->ctrl_irq);
 
   return 0;
 }
@@ -457,12 +473,13 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->spi = spi;
   spi_set_drvdata(spi, vhub);
 
-  vhub->irq = spi->irq;
-  if (vhub->irq < 0)
+  vhub->gpio_irq = spi->irq;
+  if (vhub->gpio_irq < 0)
   {
     dev_err(&vhub->spi->dev, "Irq missing in platform data");
     return -ENODEV;
   }
+  dev_info(&vhub->spi->dev, "SPI irq is defined as :%d\n", vhub->gpio_irq);
 
    // spi defs
   vhub->spi->mode = SPI_MODE_0;
@@ -481,21 +498,37 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->port_irq_mask = GENMASK(VHUB_IRQ_DEV1_BIT + vhub->max_ports - 1,
     VHUB_IRQ_DEV1_BIT);
 
-  //rc = devm_gpiod_get(&vhub->spi->dev, "reset-gpios", GPIOD_IN);
-  rc = of_property_read_u32(np, "reset-gpios", &vhub->reset_gpio);
-  dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%d\n", rc);
+  vhub->ctrl_irq = ioremap(BCM2837_INTERRUPT_REGS_BASE + 0x200, sizeof(rpi_irq_controller_t));
+  vhub->gpio_5 = ioremap(0x7e200058, sizeof(u32));
 
-  dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ, gpio_to_irq(GPIO_CLIENT_GPIO_IRQ));
-  dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ+1, gpio_to_irq(GPIO_CLIENT_GPIO_IRQ+1));
+  /* GPIO for mcu chip reset */
+  vhub->gpiod_reset = devm_gpiod_get(&vhub->spi->dev, "reset", GPIOD_OUT_HIGH);
+  dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%x\n", vhub->gpiod_reset);
+  gpiod_set_value(vhub->gpiod_reset, 1);
+
+  vhub->irq_datrdy = gpio_to_irq(GPIO_CLIENT_GPIO_IRQ);
+  dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ, vhub->irq_datrdy);
   // set the irq handler: list with "cat /proc/interrupts"
-  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq,
-    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_SHARED | /*IRQF_ONESHOT | */IRQF_NO_SUSPEND, "vusbsoc", vhub);
+  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_datrdy,
+    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)
   {
-    dev_err(&vhub->spi->dev, "Failed to request interrupt\n");
+    dev_err(&vhub->spi->dev, "Failed to request data irq interrupt\n");
     rc = -ENOMEM;
     goto err;
   }
+
+  vhub->irq = gpio_to_irq(GPIO_CLIENT_GPIO_IRQ+1);
+  //dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ+1, vhub->irq_datrdy);
+  //rc = devm_request_threaded_irq(&vhub->spi->dev, gpio_to_irq(GPIO_CLIENT_GPIO_IRQ + 1),
+  //  ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
+  //if (rc)
+  //{
+  //  dev_err(&vhub->spi->dev, "Failed to request irq interrupt\n");
+  //  rc = -ENOMEM;
+  //  goto err;
+  //}
+
 
   vhub->ep0_bufs = kzalloc(AST_VHUB_EPn_MAX_PACKET *
     (vhub->max_ports + 1),

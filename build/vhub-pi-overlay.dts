@@ -7,7 +7,7 @@
 /plugin/;
 
 / {
-	compatible = "brcm,bcm2835";
+	compatible = "brcm,bcm2837";
 
 	fragment@0 {
 		target = <&spidev0>;
@@ -29,12 +29,12 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
-				interrupts = <5 2 6 2>; /* IRQ_TYPE_EDGE_FALLING */
-				reset-gpios = <&gpio 24 1>; // GPIO_ACTIVE_HIGH
+				interrupts = <5 0 6 0>; /* IRQ_TYPE_EDGE_FALLING */
+				reset-gpio = <&gpio 24 1>; // GPIO_ACTIVE_HIGH
 				max-ports = <5>; // count of virtual hub ports
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
-				#gpio-cells = <2>;
+				#gpio-cells = <3>;
 				spi-max-frequency = <8000000>;
 			};
 		};
@@ -45,7 +45,7 @@
 			vhub_pins: vhub_pins {
 				brcm,pins = <5 6 24>;	// irq, dtrdy, reset   		
 				brcm,function = <0 0 1>; // input, input, output
-				brcm,pull = <1 1 0>;     // down, down, none
+				brcm,pull = <2 2 0>;     // down, down, none
 			};
 		};
 	};
@@ -54,8 +54,9 @@
 		ports = <&vhub>,"max-ports:0";
 		spi_irq = <&vhub>,"interrupts:0";
 		spi_dtrdy = <&vhub>,"interrupts:2";		
-		spi_cs =  <&vhub>,"reg:0";
+		spi_cs = <&vhub>,"reg:0";
 		speed =  <&vhub>,"spi-max-frequency:0";
+		reset =  <&vhub>,"reset-gpio:0";
     };
 
 };
