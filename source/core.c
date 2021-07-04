@@ -294,7 +294,7 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 #endif
 
 #define BCM2837_PERIPHERALS_BASE 0x7E00B000
-#define BCM2837_INTERRUPT_REGS_BASE BCM2837_PERIPHERALS_BASE
+#define BCM2837_INTERRUPT_REGS_BASE BCM2837_PERIPHERALS_BASE  + 0x200
 
 /** @brief The interrupt controller memory mapped register set */
 typedef struct {
@@ -321,13 +321,11 @@ static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
   if (vhub->irq_datrdy != irq)
     return IRQ_NONE;
 
-  u32 reg = readl(vhub->ctrl_irq);
-  UDCVDBG(vhub, "ast_vhub_irq_handler vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
+  //u32 reg = readl(vhub->ctrl_irq);
+  //UDCVDBG(vhub, "ast_vhub_irq_handler vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
 
   return IRQ_WAKE_THREAD;
 }
-static u16 gpio_5 = 1;
-
 
 static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
 {
@@ -337,12 +335,16 @@ static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
   iret = IRQ_HANDLED;
 
   int cpu = smp_processor_id();
+  struct irq_desc* desc = irq_to_desc(irq);
+  struct irq_data* data = irq_desc_get_irq_data(desc);
 
-  u32 reg = readl(vhub->ctrl_irq + 4);
-  UDCVDBG(vhub, "ast_vhub_irq         vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
+  if (data)
+  {
+  UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d\n", desc->irq_data.hwirq);
 
-  UDCVDBG(vhub, "ast_vhub_irq  vrt:%x, gpio:%x, gpio_val:%d\n", vhub->gpio_5 , readl(vhub->gpio_5),
-           gpio_get_value(GPIO_CLIENT_GPIO_IRQ));
+  }
+
+  u32 reg = readl(vhub->ctrl_irq + 0);
 
 /*  if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
   {
@@ -498,7 +500,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->port_irq_mask = GENMASK(VHUB_IRQ_DEV1_BIT + vhub->max_ports - 1,
     VHUB_IRQ_DEV1_BIT);
 
-  vhub->ctrl_irq = ioremap(BCM2837_INTERRUPT_REGS_BASE + 0x200, sizeof(rpi_irq_controller_t));
+  vhub->ctrl_irq = ioremap(BCM2837_INTERRUPT_REGS_BASE, sizeof(rpi_irq_controller_t));
   vhub->gpio_5 = ioremap(0x7e200058, sizeof(u32));
 
   /* GPIO for mcu chip reset */
