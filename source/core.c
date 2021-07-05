@@ -295,6 +295,36 @@ static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 }
 static uint32_t irq_called = 0;
 
+static struct workqueue_struct* irq_workerqueue;
+
+struct work_data {
+  struct work_struct work;
+  int irq;
+};
+
+static void irq_thread(struct work_struct* work);
+
+static void irq_worker(struct work_struct* work)
+{
+  struct work_data* data = (struct work_data*)work;
+
+  printk(KERN_INFO "irq_worker %d\n", ++irq_called);
+
+  //UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d, irqs/unhandled:%x, irq/call:%d\n", 
+  //              desc->irq_data.hwirq, desc->irqs_unhandled, ++irq_called);
+  //memset(vhub->transfer, 0, 1024);
+  // read
+  //  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
+  //    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+  //    // print the whole buffer
+  //#define MAX_PRINT_COLUMN (u16)32
+  //#define HEADER offsetof(spi_cmd_t, data)
+  //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+  //  }
+
+  kfree(data);
+}
+
 static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
@@ -309,26 +339,14 @@ static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
     {
       //ack_unmask_irq(desc);
       chip->irq_ack(data);
-      UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d, irqs/unhandled:%x, irq/call:%d\n", 
-                    desc->irq_data.hwirq, desc->irqs_unhandled, ++irq_called);
+      struct work_data* data;
+      data = kmalloc(sizeof(struct work_data), GFP_KERNEL);
+      data->irq = desc->irq_data.hwirq;
+      INIT_WORK(&data->work, irq_worker);
+      queue_work(irq_workerqueue, &data->work);
     }
   }
-
-
-  //  memset(vhub->transfer, 0, 1024);
-  //  // read
-  //  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
-  //    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-  //    // print the whole buffer
-  //#define MAX_PRINT_COLUMN (u16)32
-  //#define HEADER offsetof(spi_cmd_t, data)
-  //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-  //  }
-  //  else {
-  //    UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", 0, irq);
-  //  }
-
- return iret;
+  return iret;
 }
 
 void ast_vhub_init_hw(struct ast_vhub* vhub)
@@ -377,8 +395,6 @@ static int ast_vhub_remove(struct spi_device* spi)
   spin_lock_irqsave(&vhub->lock, flags);
   spin_unlock_irqrestore(&vhub->lock, flags);
 
-  iounmap(vhub->ctrl_irq);
-
   return 0;
 }
 
@@ -397,6 +413,8 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub = devm_kzalloc(&spi->dev, sizeof(*vhub), GFP_KERNEL);
   if (!vhub)
     return -ENOMEM;
+
+  irq_workerqueue = create_workqueue("irq_workerqueue");
 
   // change to device tree later
   rc = of_property_read_u32(np, "max-ports", &vhub->max_ports);

@@ -415,8 +415,6 @@ struct ast_vhub {
 	u8 *transfer;
   void __iomem* regs;
 
-  void __iomem* ctrl_irq;
-  void __iomem* gpio_5;
   int gpio_irq;
 	int irq;
   int irq_datrdy;
