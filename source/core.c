@@ -299,29 +299,28 @@ static struct workqueue_struct* irq_workerqueue;
 
 struct work_data {
   struct work_struct work;
-  int irq;
+  struct ast_vhub* vhub;
+  int irq; // actual irq
+  int irqs_unhandled;
 };
-
-static void irq_thread(struct work_struct* work);
 
 static void irq_worker(struct work_struct* work)
 {
   struct work_data* data = (struct work_data*)work;
+  struct ast_vhub* vhub = data->vhub;
 
-  printk(KERN_INFO "irq_worker %d\n", ++irq_called);
-
-  //UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d, irqs/unhandled:%x, irq/call:%d\n", 
-  //              desc->irq_data.hwirq, desc->irqs_unhandled, ++irq_called);
-  //memset(vhub->transfer, 0, 1024);
-  // read
-  //  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
-  //    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-  //    // print the whole buffer
-  //#define MAX_PRINT_COLUMN (u16)32
-  //#define HEADER offsetof(spi_cmd_t, data)
-  //    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-  //  }
-
+  UDCVDBG(vhub, "irq_worker irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
+              data->irq, data->irqs_unhandled, ++irq_called);
+  //printk(KERN_INFO "irq_worker %d\n", ++irq_called);
+  memset(vhub->transfer, 0, 1024);
+   //read
+    if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
+      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+      // print the whole buffer
+  #define MAX_PRINT_COLUMN (u16)32
+  #define HEADER offsetof(spi_cmd_t, data)
+      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+    }
   kfree(data);
 }
 
@@ -337,13 +336,15 @@ static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      //ack_unmask_irq(desc);
       chip->irq_ack(data);
-      struct work_data* data;
-      data = kmalloc(sizeof(struct work_data), GFP_KERNEL);
-      data->irq = desc->irq_data.hwirq;
-      INIT_WORK(&data->work, irq_worker);
-      queue_work(irq_workerqueue, &data->work);
+      struct work_data* wd;
+      wd = kmalloc(sizeof(struct work_data), GFP_KERNEL);
+      wd->vhub = vhub;
+      wd->irq = desc->irq_data.hwirq;
+      // diagnostic
+      wd->irqs_unhandled = desc->irqs_unhandled;
+      INIT_WORK(&wd->work, irq_worker);
+      queue_work(irq_workerqueue, &wd->work);
     }
   }
   return iret;
@@ -372,6 +373,10 @@ static int ast_vhub_remove(struct spi_device* spi)
 
   /* disable the slave IRQ line */
   disable_irq(vhub->gpio_irq);
+
+  /* IRQ worker queue */
+  flush_workqueue(irq_workerqueue);
+  destroy_workqueue(irq_workerqueue);
 
   /* Remove devices */
   for (i = 0; i < vhub->max_ports; i++) {
@@ -414,6 +419,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   if (!vhub)
     return -ENOMEM;
 
+  // create worker queue for irq and irdtrdy
   irq_workerqueue = create_workqueue("irq_workerqueue");
 
   // change to device tree later
