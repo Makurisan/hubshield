@@ -279,39 +279,6 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 }
 
 #define GPIO_CLIENT_GPIO_IRQ 5
-#define RPI3
-
-#if defined( RPI0 ) || defined( RPI1 )
-  #define GPIO_BASE       0x20200000UL
-#elif defined( RPI2 ) || defined( RPI3 )
-  #define GPIO_BASE       0x3F200000UL
-#elif defined( RPI4 )
-  /* This comes from the linux source code:
-     https://github.com/raspberrypi/linux/blob/rpi-4.19.y/arch/arm/boot/dts/bcm2838.dtsi */
-  #define GPIO_BASE       0xFE200000UL
-#else
-  #error Unknown RPI Model!
-#endif
-
-#define BCM2837_PERIPHERALS_BASE 0x7E00B000
-#define BCM2837_INTERRUPT_REGS_BASE BCM2837_PERIPHERALS_BASE  + 0x200
-
-/** @brief The interrupt controller memory mapped register set */
-typedef struct {
-  volatile uint32_t IRQ_basic_pending; // 0x200
-  volatile uint32_t IRQ_pending_1;     // 0x204
-  volatile uint32_t IRQ_pending_2;     // ... 
-  volatile uint32_t FIQ_control;
-  volatile uint32_t Enable_IRQs_1;
-  volatile uint32_t Enable_IRQs_2;
-  volatile uint32_t Enable_Basic_IRQs;
-  volatile uint32_t Disable_IRQs_1;
-  volatile uint32_t Disable_IRQs_2;
-  volatile uint32_t Disable_Basic_IRQs;
-} rpi_irq_controller_t;
-
-static rpi_irq_controller_t* rpiIRQController =
-(rpi_irq_controller_t*)BCM2837_INTERRUPT_REGS_BASE;
 
 static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 {
@@ -326,35 +293,29 @@ static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 
   return IRQ_WAKE_THREAD;
 }
+static uint32_t irq_called = 0;
 
 static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
-  irqreturn_t iret = IRQ_NONE;
+  irqreturn_t iret = IRQ_HANDLED;
 
-  iret = IRQ_HANDLED;
-
-  int cpu = smp_processor_id();
   struct irq_desc* desc = irq_to_desc(irq);
   struct irq_data* data = irq_desc_get_irq_data(desc);
-
-  if (data)
+  if (desc && data && desc->irq_data.hwirq == GPIO_CLIENT_GPIO_IRQ)
   {
-  UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d\n", desc->irq_data.hwirq);
-
+    struct irq_chip* chip = irq_desc_get_chip(desc);
+    if (chip)
+    {
+      //ack_unmask_irq(desc);
+      chip->irq_ack(data);
+      UDCVDBG(vhub, "ast_vhub_irq irq/desc:%d, irqs/unhandled:%x, irq/call:%d\n", 
+                    desc->irq_data.hwirq, desc->irqs_unhandled, ++irq_called);
+    }
   }
 
-  u32 reg = readl(vhub->ctrl_irq + 0);
-
-/*  if (gpio_get_value(GPIO_CLIENT_GPIO_IRQ) == 1)
-  {
-    UDCVDBG(vhub, "ast_vhub_irq GPIO high status irq:%d\n", irq);
-  }
-  else */
-  {
 
   //  memset(vhub->transfer, 0, 1024);
-
   //  // read
   //  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
   //    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
@@ -366,8 +327,8 @@ static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
   //  else {
   //    UDCVDBG(vhub, "ast_vhub_irq spi error with read buffer:%d, value :%d \n", 0, irq);
   //  }
-  }
-  return iret;
+
+ return iret;
 }
 
 void ast_vhub_init_hw(struct ast_vhub* vhub)
@@ -500,9 +461,6 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->port_irq_mask = GENMASK(VHUB_IRQ_DEV1_BIT + vhub->max_ports - 1,
     VHUB_IRQ_DEV1_BIT);
 
-  vhub->ctrl_irq = ioremap(BCM2837_INTERRUPT_REGS_BASE, sizeof(rpi_irq_controller_t));
-  vhub->gpio_5 = ioremap(0x7e200058, sizeof(u32));
-
   /* GPIO for mcu chip reset */
   vhub->gpiod_reset = devm_gpiod_get(&vhub->spi->dev, "reset", GPIOD_OUT_HIGH);
   dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%x\n", vhub->gpiod_reset);
@@ -512,7 +470,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ, vhub->irq_datrdy);
   // set the irq handler: list with "cat /proc/interrupts"
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_datrdy,
-    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
+    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request data irq interrupt\n");
