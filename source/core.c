@@ -35,6 +35,8 @@
 #include <linux/fs.h>
 #include <linux/irq.h>
 #include "vhub.h"
+//#define CREATE_TRACE_POINTS
+//#include "trace_vhub.h"
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
@@ -312,15 +314,16 @@ static void irq_worker(struct work_struct* work)
   UDCVDBG(vhub, "irq_worker irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
               data->irq, data->irqs_unhandled, ++irq_called);
   //printk(KERN_INFO "irq_worker %d\n", ++irq_called);
+  //trace_irq_dtrdy("irq_worker irq/desc:%d, irqs/unhandled:", data->irqs_unhandled);
   memset(vhub->transfer, 0, 1024);
-   //read
-    if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
-      spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-      // print the whole buffer
-  #define MAX_PRINT_COLUMN (u16)32
-  #define HEADER offsetof(spi_cmd_t, data)
-      pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-    }
+  //read
+  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
+    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+    // print the whole buffer
+#define MAX_PRINT_COLUMN (u16)32
+#define HEADER offsetof(spi_cmd_t, data)
+    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+  }
   kfree(data);
 }
 
