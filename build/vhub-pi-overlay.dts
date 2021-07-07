@@ -35,7 +35,7 @@
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <3>;
-				spi-max-frequency = <8000000>;
+				spi-max-frequency = <1000000>;
 			};
 		};
 	};
@@ -45,7 +45,7 @@
 			vhub_pins: vhub_pins {
 				brcm,pins = <5 6 24>;	// irq, dtrdy, reset   		
 				brcm,function = <0 0 1>; // input, input, output
-				brcm,pull = <1 1 0>;     // down, down, none
+				brcm,pull = <2 2 0>;     // 0 = none, 1 = pull down, 2 = pull up
 			};
 		};
 	};

@@ -38,6 +38,9 @@
 #define VUSB_DEVICE_DETACH    0x14
 #define VUSB_DEVICE_MEMORY    0x15
 #define VUSB_DEVICE_HWATTACH  0x16
+#define VUSB_DEVICE_DATA      0x17
+#define VUSB_DEVICE_HEADER    0x18 // the header with the length field
+#define VUSB_DEVICE_CLEARSCRN 0x19
 
 #define WRITE_CMD_WRITE 0x80
 #define WRITE_CMD_READ  0x40
@@ -47,6 +50,7 @@ typedef struct vusb_send {
   uint16_t cmd;
   uint8_t cmdst[0x40];
   uint8_t port;
+  uint8_t length;
 }vusb_send_t;
 
 static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg);
@@ -65,13 +69,14 @@ const struct file_operations vusb_ops = {
 };
 
 const vusb_send_t vusb_send_tab[] = {
-    { "p",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0},
-    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1},
-    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1},
-    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0},
-    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0},
-    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1},
-    { "c",   /*cmd*/ WRITE_CMD_READ  | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_READ",    /*port*/0},
+    { "p",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0,  4},
+    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1,  4},
+    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1,  8},
+    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0,  4},
+    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0,  4},
+    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1,  4},
+    { "c",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 12},
+    { "i",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0,  4},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)
@@ -104,28 +109,26 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
 {
   struct ast_vhub* vhub;
   vhub = file->private_data;
+  const size_t maxdatalen = 120;
+  uint8_t *data = kmalloc(maxdatalen, GFP_KERNEL);
+  memset(data, 0, maxdatalen);
+  size_t ncopied;
+  ncopied = copy_from_user(data, buf, maxdatalen);
 
-  size_t maxdatalen = 30, ncopied;
-  uint8_t databuf[maxdatalen];
-  if (count < maxdatalen) {
-    maxdatalen = count;
-  }
-  ncopied = copy_from_user(databuf, buf, maxdatalen);
-  databuf[maxdatalen] = 0;
-
-  printk("cmd: %s", databuf);
+  printk("cmd: %s", data);
   size_t i, j;
-  for (i=0; i < strlen(databuf); i++) {
+  for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
-      if (strncasecmp(&databuf[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
-        printk(": %s", vusb_send_tab[j].cmdst);
-        memset(vhub->transfer, 0x00, 4);
-        vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, 4);
-        msleep(200);
+      if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
+        printk("act: %s, idx:%d", vusb_send_tab[j].cmdst, i);
+        memset(vhub->transfer, 0, 32);
+        vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, vusb_send_tab[j].length);
+        msleep(400);
+        break;
       }
     }
   }
-
+  kfree(data);
   return count;
 }
 

@@ -35,8 +35,6 @@
 #include <linux/fs.h>
 #include <linux/irq.h>
 #include "vhub.h"
-//#define CREATE_TRACE_POINTS
-//#include "trace_vhub.h"
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
@@ -59,7 +57,7 @@ void pr_hex_mark(const char* mem, int count, int mark)
   for (i = 0; i < count && count < sizeof(hexline); i++)
   {
     if (i == 3)
-      sprintf(hexbyte, "%02X] length: %d\n   ", mem[i], (u16)mem[2]);
+      sprintf(hexbyte, "%02X] length: %d, count: %d\n   ", mem[i], (uint16_t)mem[2], count);
     else
       sprintf(hexbyte, "%02X ", mem[i]);
     strcat(hexline, hexbyte);
@@ -197,7 +195,7 @@ void ast_vhub_free_request(struct usb_ep* u_ep, struct usb_request* u_req)
 static int value= 0;
 
 // read the data from the SIE
-static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
+int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
 {
   struct spi_device* spi = vhub->spi;
   struct spi_transfer	tr;
@@ -217,8 +215,10 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
   spi_cmd_t* cmd = (spi_cmd_t*)buffer;
 
   // check data
-  if (cmd->reg.bit.read || cmd->reg.bit.write)
+  if (1) // cmd->reg.bit.read || cmd->reg.bit.write
   {
+// test: read what is prepared at the MCU
+    cmd->reg.val = 0;
     memset(&tr, 0, sizeof(tr));
     spi_message_init(&m);
     // data
@@ -229,7 +229,7 @@ static int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
       tr.len = cmd->length;
       spi_message_add_tail(&tr, &m);
       if (!spi_sync(spi, &m) /*&& crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8*/) { 
-        return 1;
+        return cmd->length;
       }
       else {
         UDCVDBG(vhub, "vusb_read_buffer spi_sync error!\n");
@@ -272,11 +272,11 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   spi_message_add_tail(&t, &msg);
 
   if (cmd->reg.bit.read) {
-    UDCVDBG(vhub, "ast_vhub_irq spi write(read) count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
+    //UDCVDBG(vhub, "write_buffer spi write(read) count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
     spi_sync(spi, &msg);
     return 1;
   }
-  UDCVDBG(vhub, "ast_vhub_irq spi write count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
+  //UDCVDBG(vhub, "write_buffer spi write count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
   return !spi_sync(spi, &msg);
 }
 
@@ -289,10 +289,6 @@ static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 /* Stale interrupt while tearing down */
   if (vhub->irq_datrdy != irq)
     return IRQ_NONE;
-
-  //u32 reg = readl(vhub->ctrl_irq);
-  //UDCVDBG(vhub, "ast_vhub_irq_handler vrt:%x, reg:%x, hwirq:%d\n", vhub->ctrl_irq, reg, ffs(reg) - 1);
-
   return IRQ_WAKE_THREAD;
 }
 static uint32_t irq_called = 0;
@@ -311,19 +307,20 @@ static void irq_worker(struct work_struct* work)
   struct work_data* data = (struct work_data*)work;
   struct ast_vhub* vhub = data->vhub;
 
-  UDCVDBG(vhub, "irq_worker irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
+  trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
               data->irq, data->irqs_unhandled, ++irq_called);
-  //printk(KERN_INFO "irq_worker %d\n", ++irq_called);
-  //trace_irq_dtrdy("irq_worker irq/desc:%d, irqs/unhandled:", data->irqs_unhandled);
+  
+  //clear and read
   memset(vhub->transfer, 0, 1024);
-  //read
-  if (vusb_read_buffer(vhub, vhub->transfer, 64)) {
-    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-    // print the whole buffer
-#define MAX_PRINT_COLUMN (u16)32
-#define HEADER offsetof(spi_cmd_t, data)
-    pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-  }
+//  if (vusb_read_buffer(vhub, vhub->transfer, 8)) {
+//    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+//    // print read buffer
+//#define MAX_PRINT_COLUMN (u16)32
+//#define HEADER offsetof(spi_cmd_t, data)
+//    //pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+//    printk("irq_worker:%d\n", irq_called);
+//    pr_hex_mark(vhub->transfer, cmd->length, PR_READ);
+//  }
   kfree(data);
 }
 
@@ -568,7 +565,7 @@ static int ast_vhub_probe(struct spi_device* spi)
 
   device_create(vhub->chardev_class, NULL, MKDEV(vhub->crdev_major, 1), NULL, "vusb-%d", 1);
  
-  dev_info(&spi->dev, "Succesfully initialized vhub.\n");
+  trace_printk("Succesfully initialized vhub.\n");
   return 0;
 
 err:
