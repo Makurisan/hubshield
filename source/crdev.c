@@ -120,7 +120,7 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
   for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
-        printk("read device act: %s, idx:%d", vusb_send_tab[j].cmdst, i);
+        printk("char device write: %s, idx:%d", vusb_send_tab[j].cmdst, i);
         size_t k, l=5;
         for (k = 0; k < 32; k++)
          vhub->transfer[k]= ++l;

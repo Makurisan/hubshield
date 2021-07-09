@@ -48,6 +48,7 @@ void pr_hex(const char* mem, int count)
 #define PR_WRITE 1
 #define PR_READ  2
 #define PR_ERROR 4
+#define WRITE_CMD_READ  0x40
 
 void pr_hex_mark(const char* mem, int count, int mark)
 {
@@ -210,17 +211,15 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
   tr.len = offsetof(spi_cmd_t, data);
 
   spi_message_add_tail(&tr, &m);
+  // read the header
   spi_sync(spi, &m);
 
   spi_cmd_t* cmd = (spi_cmd_t*)buffer;
-
-  UDCVDBG(vhub, "vusb_read_buffer length:%d\n", cmd->length);
-
+  cmd->reg.val = 0;
+  UDCVDBG(vhub, "mcu read length:%d\n", cmd->length);
   // check data
-  if (cmd->length) // cmd->reg.bit.read || cmd->reg.bit.write
+  if (cmd->length)
   {
-// test: read what is prepared at the MCU
-    cmd->reg.val = 0;
     memset(&tr, 0, sizeof(tr));
     spi_message_init(&m);
     // data
@@ -235,11 +234,11 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
         return cmd->length;
       }
       else {
-        UDCVDBG(vhub, "vusb_read_buffer spi_sync error!\n");
+        UDCVDBG(vhub, "mcu read spi_sync error!\n");
       }
     }
     else {
-      UDCVDBG(vhub, "vusb_read_buffer spi buffer exceeds maximal size length: %02x\n", cmd->length);
+      UDCVDBG(vhub, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
     }
   }
   return 0;
@@ -321,7 +320,7 @@ static void irq_worker(struct work_struct* work)
 #define MAX_PRINT_COLUMN (u16)32
 #define HEADER offsetof(spi_cmd_t, data)
     //pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-    printk("irq_worker:%d\n", irq_called);
+    //printk("irq_worker:%d\n", irq_called);
     pr_hex_mark(vhub->transfer, cmd->length+4, PR_READ);
   }
   kfree(data);
