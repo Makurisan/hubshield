@@ -76,13 +76,13 @@ const vusb_send_t vusb_send_tab[] = {
     { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0,  4},
     { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1,  4},
     { "c",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 12},
-    { "i",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0,  4},
+    { "i",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0,  8},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)
 {
   struct ast_vhub* vhub;
-  printk("vusb: Device open with %d possible cmds\n", sizeof(vusb_send_tab) / sizeof(vusb_send_t));
+  //printk("vusb: Device open with %d possible cmds\n", sizeof(vusb_send_tab) / sizeof(vusb_send_t));
   vhub = container_of(inode->i_cdev, struct ast_vhub, cdev);
   file->private_data = vhub;
   return 0;
@@ -120,8 +120,11 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
   for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
-        printk("act: %s, idx:%d", vusb_send_tab[j].cmdst, i);
-        memset(vhub->transfer, 0, 32);
+        printk("read device act: %s, idx:%d", vusb_send_tab[j].cmdst, i);
+        size_t k, l=5;
+        for (k = 0; k < 32; k++)
+         vhub->transfer[k]= ++l;
+        //memset(vhub->transfer, 0x2, 32);
         vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, vusb_send_tab[j].length);
         msleep(400);
         break;

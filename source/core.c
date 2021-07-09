@@ -214,8 +214,10 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
 
   spi_cmd_t* cmd = (spi_cmd_t*)buffer;
 
+  UDCVDBG(vhub, "vusb_read_buffer length:%d\n", cmd->length);
+
   // check data
-  if (1) // cmd->reg.bit.read || cmd->reg.bit.write
+  if (cmd->length) // cmd->reg.bit.read || cmd->reg.bit.write
   {
 // test: read what is prepared at the MCU
     cmd->reg.val = 0;
@@ -223,6 +225,7 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
     spi_message_init(&m);
     // data
     tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
+    //tr.rx_buf = buffer;
     cmd->length = length;
     if (cmd->length < 1024)
     {
@@ -312,15 +315,15 @@ static void irq_worker(struct work_struct* work)
   
   //clear and read
   memset(vhub->transfer, 0, 1024);
-//  if (vusb_read_buffer(vhub, vhub->transfer, 8)) {
-//    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-//    // print read buffer
-//#define MAX_PRINT_COLUMN (u16)32
-//#define HEADER offsetof(spi_cmd_t, data)
-//    //pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-//    printk("irq_worker:%d\n", irq_called);
-//    pr_hex_mark(vhub->transfer, cmd->length, PR_READ);
-//  }
+  if (vusb_read_buffer(vhub, vhub->transfer, 8)) {
+    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+    // print read buffer
+#define MAX_PRINT_COLUMN (u16)32
+#define HEADER offsetof(spi_cmd_t, data)
+    //pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
+    printk("irq_worker:%d\n", irq_called);
+    pr_hex_mark(vhub->transfer, cmd->length+4, PR_READ);
+  }
   kfree(data);
 }
 
@@ -501,6 +504,14 @@ static int ast_vhub_probe(struct spi_device* spi)
     rc = -ENOMEM;
     goto err;
   }
+  struct gpio_desc* gpio = devm_gpiod_get_index(&vhub->spi->dev, NULL, 1, GPIOD_IN);
+  //if (gpio)
+  //{
+  //  rc = gpiod_direction_input(gpio);
+  //  if (rc)
+  //    dev_err(&vhub->spi->dev, "Failed to get irq 5 input data\n");
+
+  //}
 
   vhub->irq = gpio_to_irq(GPIO_CLIENT_GPIO_IRQ+1);
   //dev_info(&vhub->spi->dev, "GPIO for irq %d = %d.\n", GPIO_CLIENT_GPIO_IRQ+1, vhub->irq_datrdy);
