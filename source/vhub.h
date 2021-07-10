@@ -418,6 +418,7 @@ struct ast_vhub {
   int gpio_irq;
 	int irq;
   int irq_datrdy;
+  int irq_error;
   struct gpio_desc* gpiod_reset;
 
 	spinlock_t lock;
