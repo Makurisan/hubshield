@@ -41,6 +41,7 @@
 #define VUSB_DEVICE_DATA      0x17
 #define VUSB_DEVICE_HEADER    0x18 // the header with the length field
 #define VUSB_DEVICE_CLEARSCRN 0x19
+#define VUSB_DEVICE_IRQ       0x20
 
 #define VUSB_DEVICE_ERROR 0x3e // diagnose
 #define VUSB_DEVICE_MAX 0x3f // max cmd nbr

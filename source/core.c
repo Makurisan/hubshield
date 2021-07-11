@@ -48,8 +48,8 @@ void pr_hex(const char* mem, int count)
 #define PR_WRITE 1
 #define PR_READ  2
 #define PR_ERROR 4
-#define WRITE_CMD_READ  0x40
-#define WRITE_CMD_ERROR 0x20
+#define WRITE_CMD_READ        0x40
+#define VUSB_DEVICE_IRQ       0x1a
 
 void pr_hex_mark(const char* mem, int count, int mark)
 {
@@ -202,6 +202,9 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   struct spi_device* spi = vhub->spi;
   struct spi_transfer	tr;
   struct spi_message	m;
+  u8 cmd_reg;
+  u8 cmd_crc;
+  u16 cmd_length;
 
   spi_message_init(&m);
 
@@ -216,8 +219,10 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   spi_sync(spi, &m);
 
   spi_cmd_t* cmd = (spi_cmd_t*)buffer;
-  cmd->reg.val = reg; // irq read and normal read
-  UDCVDBG(vhub, "mcu read length:%d\n", cmd->length);
+  cmd_reg = cmd->reg.val;
+  cmd_length = cmd->length;
+  cmd_crc = cmd->crc8;
+  UDCVDBG(vhub, "mcu read length:%d, reg:%d\n", cmd->length, cmd_reg);
   // check data
   if (cmd->length)
   {
@@ -225,13 +230,15 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
     spi_message_init(&m);
     // data
     tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
-    //tr.rx_buf = buffer;
     cmd->length = length;
     if (cmd->length < 1024)
     {
       tr.len = cmd->length;
       spi_message_add_tail(&tr, &m);
       if (!spi_sync(spi, &m) /*&& crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8*/) { 
+        cmd->reg.val = cmd_reg;
+        cmd->length = cmd_length;
+        cmd->crc8 = cmd_crc;
         return cmd->length;
       }
       else {
@@ -317,9 +324,11 @@ static void irq_worker(struct work_struct* work)
               data->irq, data->irqs_unhandled, ++irq_called);
   
   //clear and read
+  spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+  cmd->length = 8;
   memset(vhub->transfer, 0, 1024);
   if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, 8)) {
-    spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+    cmd = (spi_cmd_t*)vhub->transfer;
     // print read buffer
 #define MAX_PRINT_COLUMN (u16)32
 #define HEADER offsetof(spi_cmd_t, data)
@@ -337,14 +346,15 @@ static irqreturn_t ast_vhub_irq_attention(int irq, void* dev_id)
 
   struct irq_desc* desc = irq_to_desc(irq);
   struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data &&
-    (desc->irq_data.hwirq == GPIO_MCU_ATTENTION_IRQ))
+  if (desc && data && desc->irq_data.hwirq == GPIO_MCU_ATTENTION_IRQ)
   {
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
+      UDCDBG(vhub, "char device write: VUSB_DEVICE_IRQ\n");
       trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
         desc->irq_data.hwirq, desc->irqs_unhandled, 0);
+      vusb_write_buffer(vhub, WRITE_CMD_READ|VUSB_DEVICE_IRQ, vhub->transfer, 4);
     }
   }
   return iret;
@@ -537,7 +547,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   //}
 
   vhub->irq_error = gpio_to_irq(GPIO_MCU_ATTENTION_IRQ);
-  dev_info(&vhub->spi->dev, "GPIO for mcu attention hwirq %d is irq %d.\n", GPIO_MCU_ERROR_IRQ, vhub->irq_error);
+  dev_info(&vhub->spi->dev, "GPIO for mcu attention hwirq %d is irq %d.\n", GPIO_MCU_ATTENTION_IRQ, vhub->irq_error);
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_error, NULL,
        ast_vhub_irq_attention, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
   if (rc)
