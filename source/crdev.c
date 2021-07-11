@@ -42,8 +42,12 @@
 #define VUSB_DEVICE_HEADER    0x18 // the header with the length field
 #define VUSB_DEVICE_CLEARSCRN 0x19
 
-#define WRITE_CMD_WRITE 0x80
-#define WRITE_CMD_READ  0x40
+#define VUSB_DEVICE_ERROR 0x3e // diagnose
+#define VUSB_DEVICE_MAX 0x3f // max cmd nbr
+
+#define WRITE_CMD_WRITE 0x80  // write bytes to mcu
+#define WRITE_CMD_READ  0x40  // read bytes from mcu
+#define WRITE_CMD_ERROR 0x20  // IRQ for error handling
 
 typedef struct vusb_send {
   uint8_t chr[4]; 

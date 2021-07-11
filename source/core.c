@@ -49,6 +49,7 @@ void pr_hex(const char* mem, int count)
 #define PR_READ  2
 #define PR_ERROR 4
 #define WRITE_CMD_READ  0x40
+#define WRITE_CMD_ERROR 0x20
 
 void pr_hex_mark(const char* mem, int count, int mark)
 {
@@ -196,7 +197,7 @@ void ast_vhub_free_request(struct usb_ep* u_ep, struct usb_request* u_req)
 static int value= 0;
 
 // read the data from the MCU
-int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
+int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 {
   struct spi_device* spi = vhub->spi;
   struct spi_transfer	tr;
@@ -215,7 +216,7 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8* buffer, u16 length)
   spi_sync(spi, &m);
 
   spi_cmd_t* cmd = (spi_cmd_t*)buffer;
-  cmd->reg.val = 0;
+  cmd->reg.val = reg; // irq read and normal read
   UDCVDBG(vhub, "mcu read length:%d\n", cmd->length);
   // check data
   if (cmd->length)
@@ -284,10 +285,10 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 
 #define GPIO_CLIENT_GPIO_IRQ 5
 #define GPIO_MCU_DATRDY_IRQ  5
-#define GPIO_MCU_ERROR_IRQ   6
+#define GPIO_MCU_ATTENTION_IRQ   6
 
 
-static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
+static irqreturn_t ast_vhub_irq_dtrdy_primary_handler(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
 
@@ -317,7 +318,7 @@ static void irq_worker(struct work_struct* work)
   
   //clear and read
   memset(vhub->transfer, 0, 1024);
-  if (vusb_read_buffer(vhub, vhub->transfer, 8)) {
+  if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, 8)) {
     spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
     // print read buffer
 #define MAX_PRINT_COLUMN (u16)32
@@ -329,7 +330,27 @@ static void irq_worker(struct work_struct* work)
   kfree(data);
 }
 
-static irqreturn_t ast_vhub_irq(int irq, void* dev_id)
+static irqreturn_t ast_vhub_irq_attention(int irq, void* dev_id)
+{
+  struct ast_vhub* vhub = dev_id;
+  irqreturn_t iret = IRQ_HANDLED;
+
+  struct irq_desc* desc = irq_to_desc(irq);
+  struct irq_data* data = irq_desc_get_irq_data(desc);
+  if (desc && data &&
+    (desc->irq_data.hwirq == GPIO_MCU_ATTENTION_IRQ))
+  {
+    struct irq_chip* chip = irq_desc_get_chip(desc);
+    if (chip)
+    {
+      trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
+        desc->irq_data.hwirq, desc->irqs_unhandled, 0);
+    }
+  }
+  return iret;
+}
+
+static irqreturn_t ast_vhub_irq_dtrdy(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
   irqreturn_t iret = IRQ_HANDLED;
@@ -499,10 +520,10 @@ static int ast_vhub_probe(struct spi_device* spi)
   dev_info(&vhub->spi->dev, "GPIO for mcu dtrdy hwirq %d is irq %d.\n", GPIO_MCU_DATRDY_IRQ, vhub->irq_datrdy);
   // set the irq handler: list with "cat /proc/interrupts"
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_datrdy,
-    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
+    ast_vhub_irq_dtrdy_primary_handler, ast_vhub_irq_dtrdy, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)
   {
-    dev_err(&vhub->spi->dev, "Failed to request data hwirq interrupt\n");
+    dev_err(&vhub->spi->dev, "Failed to request dtrdy hwirq interrupt\n");
     rc = -ENOMEM;
     goto err;
   }
@@ -515,13 +536,13 @@ static int ast_vhub_probe(struct spi_device* spi)
   //    dev_err(&vhub->spi->dev, "Failed to get irq 5 input data\n");
   //}
 
-  vhub->irq_error = gpio_to_irq(GPIO_MCU_ERROR_IRQ);
-  dev_info(&vhub->spi->dev, "GPIO for mcu error hwirq %d is irq %d.\n", GPIO_MCU_ERROR_IRQ, vhub->irq_error);
-  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_error,
-    ast_vhub_irq_primary_handler, ast_vhub_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
+  vhub->irq_error = gpio_to_irq(GPIO_MCU_ATTENTION_IRQ);
+  dev_info(&vhub->spi->dev, "GPIO for mcu attention hwirq %d is irq %d.\n", GPIO_MCU_ERROR_IRQ, vhub->irq_error);
+  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_error, NULL,
+       ast_vhub_irq_attention, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
   if (rc)
   {
-    dev_err(&vhub->spi->dev, "Failed to request error hwirq interrupt\n");
+    dev_err(&vhub->spi->dev, "Failed to request attention hwirq interrupt\n");
     rc = -ENOMEM;
     goto err;
   }
