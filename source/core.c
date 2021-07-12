@@ -467,7 +467,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   }
   dev_info(&spi->dev, "Hub device has %d eps.\n", vhub->max_epns);
 
-  vhub->transfer = devm_kcalloc(&spi->dev, 1024,
+  vhub->transfer = devm_kcalloc(&spi->dev, VHUB_SPI_BUFFER_LENGTH,
     sizeof(*vhub->transfer), GFP_KERNEL);
   if (!vhub->transfer)
   {
