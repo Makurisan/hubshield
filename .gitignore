@@ -1,1 +1,3 @@
 /.vs/**
+/build/pi3-1/gadget
+/build/pi3-1/remote
