@@ -324,7 +324,7 @@ static void irq_worker(struct work_struct* work)
   kfree(data);
 }
 
-static irqreturn_t ast_vhub_irq_attention(int irq, void* dev_id)
+static irqreturn_t ast_vhub_irq_listen(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
   irqreturn_t iret = IRQ_HANDLED;
@@ -523,18 +523,10 @@ static int ast_vhub_probe(struct spi_device* spi)
     goto err;
   }
 
-  //struct gpio_desc* gpio = devm_gpiod_get_index(&vhub->spi->dev, NULL, 1, GPIOD_IN);
-  //if (gpio)
-  //{
-  //  rc = gpiod_direction_input(gpio);
-  //  if (rc)
-  //    dev_err(&vhub->spi->dev, "Failed to get irq 5 input data\n");
-  //}
-
   vhub->irq_error = gpio_to_irq(GPIO_MCU_ATTENTION_IRQ);
   dev_info(&vhub->spi->dev, "GPIO for mcu attention hwirq %d is irq %d.\n", GPIO_MCU_ATTENTION_IRQ, vhub->irq_error);
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_error, NULL,
-       ast_vhub_irq_attention, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
+       ast_vhub_irq_listen, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request attention hwirq interrupt\n");
