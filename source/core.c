@@ -53,15 +53,23 @@ void pr_hex(const char* mem, int count)
 
 void pr_hex_mark(const char* mem, int count, int mark)
 {
-  char hexbyte[64] = "";
-  char hexline[256] = "";
+  char hexbyte[64];
+  char hexline[255];
+
+  memset(hexbyte, 0, sizeof(hexbyte));
+  memset(hexline, 0, sizeof(hexline));
+
   int i, k = 0;
   for (i = 0; i < count && count < sizeof(hexline); i++)
   {
-    if (i == 3)
-      sprintf(hexbyte, "%02X] length: %d, count: %d\n   ", mem[i], (uint16_t)mem[2], count);
-    else
+    if (i == 3) {
+      sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
+      if (count > 4)
+        strcat(hexbyte, "\n   ");
+    }
+    else {
       sprintf(hexbyte, "%02X ", mem[i]);
+    }
     strcat(hexline, hexbyte);
 
     // print line every 16 bytes or if this is the last for-loop
@@ -90,7 +98,7 @@ void pr_hex_mark(const char* mem, int count, int mark)
         break;
       }
       //syslog(LOG_INFO, "l%d: %s",k , hexline); // print line to syslog
-      memset(&hexline[0], 0, sizeof(hexline)); // clear hexline array
+      memset(hexline, 0, sizeof(hexline)); // clear hexline array
     }
   }
 }
@@ -203,50 +211,43 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   struct spi_transfer	tr;
   struct spi_message	m;
   u8 cmd_reg;
-  u8 cmd_crc;
-  u16 cmd_length;
 
   spi_message_init(&m);
-
   memset(&tr, 0, sizeof(tr));
 
   tr.rx_buf = buffer;
-  // header 4 bytes
-  tr.len = offsetof(spi_cmd_t, data);
-
+  tr.len = VHUB_SPI_HEADER;
   spi_message_add_tail(&tr, &m);
-  // read the header
-  spi_sync(spi, &m);
-
-  spi_cmd_t* cmd = (spi_cmd_t*)buffer;
-  cmd_reg = cmd->reg.val;
-  cmd_length = cmd->length;
-  cmd_crc = cmd->crc8;
-  UDCVDBG(vhub, "mcu read length:%d, reg:%d\n", cmd->length, cmd_reg);
-  // check data
-  if (cmd->length)
+  // read the four bytes header
+  if (!spi_sync(spi, &m))
   {
-    memset(&tr, 0, sizeof(tr));
-    spi_message_init(&m);
-    // data
-    tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
-    cmd->length = length;
-    if (cmd->length < 1024)
+    spi_cmd_t* cmd = (spi_cmd_t*)buffer;
+    cmd_reg = cmd->reg.val;
+    UDCVDBG(vhub, "mcu read length:%d, crc:%x, reg:%x\n", cmd->length, cmd->crc8, cmd_reg);
+    pr_hex_mark(vhub->transfer, cmd->length, PR_READ);
+    // check data
+    if (cmd->length)
     {
-      tr.len = cmd->length;
-      spi_message_add_tail(&tr, &m);
-      if (!spi_sync(spi, &m) /*&& crc8(vbus_crc_table, tr.rx_buf, tr.len, 0) == cmd->crc8*/) { 
-        cmd->reg.val = cmd_reg;
-        cmd->length = cmd_length;
-        cmd->crc8 = cmd_crc;
-        return cmd->length;
+      memset(&tr, 0, sizeof(tr));
+      spi_message_init(&m);
+      // data
+      tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
+      if (cmd->length < VHUB_SPI_BUFFER_LENGTH)
+      {
+        tr.len = cmd->length;
+        spi_message_add_tail(&tr, &m);
+        if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, cmd->length, 0) == cmd->crc8) {
+          // set the reg back to the header, the other fields are correct  
+          cmd->reg.val = cmd_reg;
+          return cmd->length;
+        }
+        else {
+          UDCVDBG(vhub, "mcu read spi_sync error!\n");
+        }
       }
       else {
-        UDCVDBG(vhub, "mcu read spi_sync error!\n");
+        UDCVDBG(vhub, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
       }
-    }
-    else {
-      UDCVDBG(vhub, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
     }
   }
   return 0;
@@ -254,7 +255,6 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 
 int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
 {
-  struct spi_device* spi = vhub->spi;
   struct spi_transfer t;
   struct spi_message msg;
 
@@ -264,30 +264,20 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   // header reg, length, crc
   spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
 
-  // copy the out data
-  //memmove(vhub->transfer + 4, buffer, length);
-
+  // prepare the header
   cmd->reg.val = reg;
   cmd->crc8 = crc8(vbus_crc_table, cmd->data, length, 0);
   cmd->length = length;
 
   t.tx_buf = vhub->transfer;
-  t.len = offsetof(spi_cmd_t, data) + length; //
+  t.len = cmd->length;
   t.delay_usecs = 0;
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
   pr_hex_mark(vhub->transfer, min(64, t.len), PR_WRITE);
-
   spi_message_add_tail(&t, &msg);
-
-  if (cmd->reg.bit.read) {
-    //UDCVDBG(vhub, "write_buffer spi write(read) count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
-    spi_sync(spi, &msg);
-    return 1;
-  }
-  //UDCVDBG(vhub, "write_buffer spi write count: %d, hex:%04x, t.len:%d\n", length, cmd->length, t.len);
-  return !spi_sync(spi, &msg);
+  return !spi_sync(vhub->spi, &msg);
 }
 
 #define GPIO_CLIENT_GPIO_IRQ 5
@@ -322,19 +312,13 @@ static void irq_worker(struct work_struct* work)
 
   trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
               data->irq, data->irqs_unhandled, ++irq_called);
-  
   //clear and read
   spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-  cmd->length = 8;
-  memset(vhub->transfer, 0, 1024);
-  if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, 8)) {
+  cmd->length = VHUB_SPI_BUFFER_LENGTH>>1;
+  memset(vhub->transfer, 0, cmd->length);
+  if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, cmd->length)) {
     cmd = (spi_cmd_t*)vhub->transfer;
-    // print read buffer
-#define MAX_PRINT_COLUMN (u16)32
-#define HEADER offsetof(spi_cmd_t, data)
-    //pr_hex_mark(vhub->transfer, min(MAX_PRINT_COLUMN, cmd->length + HEADER), PR_READ);
-    //printk("irq_worker:%d\n", irq_called);
-    pr_hex_mark(vhub->transfer, cmd->length+4, PR_READ);
+    pr_hex_mark(vhub->transfer, cmd->length + VHUB_SPI_HEADER, PR_READ);
   }
   kfree(data);
 }
@@ -351,10 +335,10 @@ static irqreturn_t ast_vhub_irq_attention(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      UDCDBG(vhub, "char device write: VUSB_DEVICE_IRQ\n");
+      UDCDBG(vhub, "mcu write/read: VUSB_DEVICE_IRQ\n");
       trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
         desc->irq_data.hwirq, desc->irqs_unhandled, 0);
-      vusb_write_buffer(vhub, WRITE_CMD_READ|VUSB_DEVICE_IRQ, vhub->transfer, 4);
+      vusb_write_buffer(vhub, WRITE_CMD_READ|VUSB_DEVICE_IRQ, vhub->transfer, VHUB_SPI_HEADER);
     }
   }
   return iret;

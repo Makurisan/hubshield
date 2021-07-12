@@ -226,9 +226,9 @@ static void ast_vhub_epn_kick_desc(struct ast_vhub_ep *ep,
 		 * as we use 256 descriptors and only put at most one
 		 * request in the ring.
 		 */
-		desc->w1 = cpu_to_le32(VHUB_DSC1_IN_SET_LEN(chunk));
-		if (req->last_desc >= 0 || !ast_vhub_count_free_descs(ep))
-			desc->w1 |= cpu_to_le32(VHUB_DSC1_IN_INTERRUPT);
+		//desc->w1 = cpu_to_le32(VHUB_DSC1_IN_SET_LEN(chunk));
+		//if (req->last_desc >= 0 || !ast_vhub_count_free_descs(ep))
+		//	desc->w1 |= cpu_to_le32(VHUB_DSC1_IN_INTERRUPT);
 
 		/* Account packet */
 		req->act_count = act = act + chunk;
@@ -278,7 +278,7 @@ static void ast_vhub_epn_handle_ack_desc(struct ast_vhub_ep *ep)
 		ep->epn.d_last = (d_num + 1) & (AST_VHUB_DESCS_COUNT - 1);
 
 		/* Grab len out of descriptor */
-		len = VHUB_DSC1_IN_LEN(le32_to_cpu(desc->w1));
+		//len = VHUB_DSC1_IN_LEN(le32_to_cpu(desc->w1));
 
 		EPVDBG(ep, " desc %d len=%d req=%p (act=%d)\n",
 		       d_num, len, req, req ? req->active : 0);

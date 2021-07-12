@@ -184,20 +184,14 @@
 #define VHUB_EP_DMA_SET_CPU_WPTR(x)	(x)
 #define VHUB_EP_DMA_SINGLE_KICK		(1 << 0) /* WPTR = 1 for single mode */
 
-/*******************************
- *                             *
- * DMA descriptors definitions *
- *                             *
- *******************************/
+/*********************************
+ *                               *
+ * SPI definition for read/write *
+ *                               *
+ *********************************/
 
-/* Desc W1 IN */
-#define VHUB_DSC1_IN_INTERRUPT		(1 << 31)
-#define VHUB_DSC1_IN_SPID_DATA0		(0 << 14)
-#define VHUB_DSC1_IN_SPID_DATA2		(1 << 14)
-#define VHUB_DSC1_IN_SPID_DATA1		(2 << 14)
-#define VHUB_DSC1_IN_SPID_MDATA		(3 << 14)
-#define VHUB_DSC1_IN_SET_LEN(x)		((x) & 0xfff)
-#define VHUB_DSC1_IN_LEN(x)		((x) & 0xfff)
+#define VHUB_SPI_HEADER		        (1 <<  2)
+#define VHUB_SPI_BUFFER_LENGTH		(1 << 10)
 
 /****************************************
  *                                      *
