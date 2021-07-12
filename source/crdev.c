@@ -125,10 +125,10 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
         memset(vhub->transfer, 0, VHUB_SPI_BUFFER_LENGTH);
         if (vusb_send_tab[j].cmd & WRITE_CMD_WRITE) {
-          UDCDBG(vhub, "mcu write: %s, idx:%d", vusb_send_tab[j].cmdst, i);
+          UDCDBG(vhub, "mcu write: %s", vusb_send_tab[j].cmdst);
         }
         else {
-          UDCDBG(vhub, "mcu write/read: %s, idx:%d", vusb_send_tab[j].cmdst, i);
+          UDCDBG(vhub, "mcu write/read: %s", vusb_send_tab[j].cmdst);
         }
         vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, vusb_send_tab[j].length);
         msleep(400);

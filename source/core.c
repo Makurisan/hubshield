@@ -63,7 +63,8 @@ void pr_hex_mark(const char* mem, int count, int mark)
   for (i = 0; i < count && count < sizeof(hexline); i++)
   {
     if (i == 3) {
-      sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
+    //  sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
+      sprintf(hexbyte, "%02X] length: %d", mem[i], count);
       if (count > 4)
         strcat(hexbyte, "\n   ");
     }
