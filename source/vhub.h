@@ -193,6 +193,16 @@
 #define VHUB_SPI_HEADER		        (1 <<  2)
 #define VHUB_SPI_BUFFER_LENGTH		(1 << 10)
 
+
+/***********************************
+*                                  *
+* GPI definition for irq handling  *
+*                                  *
+***********************************/
+
+#define GPIO_DATRDY_IRQ_PIN   5
+#define GPIO_LISTEN_IRQ_PIN   6
+
 /****************************************
  *                                      *
  * Data structures and misc definitions *
@@ -412,8 +422,11 @@ struct ast_vhub {
   int gpio_irq;
 	int irq;
   int irq_datrdy;
-  int irq_error;
+  int irq_listen;
   struct gpio_desc* gpiod_reset;
+
+  struct mutex spi_read_mutex;
+  struct wait_queue_head spi_read_queue;
 
 	spinlock_t lock;
 	struct mutex spi_bus_mutex;

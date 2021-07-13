@@ -38,38 +38,43 @@
 
 DECLARE_CRC8_TABLE(vbus_crc_table);
 
-void pr_hex_mark(const char* mem, int count, int mark);
-
-void pr_hex(const char* mem, int count)
-{
-  pr_hex_mark(mem, count, 0);
-}
-
 #define PR_WRITE 1
 #define PR_READ  2
 #define PR_ERROR 4
+
 #define WRITE_CMD_READ        0x40
 #define VUSB_DEVICE_IRQ       0x1a
 
 void pr_hex_mark(const char* mem, int count, int mark)
 {
   char hexbyte[64];
-  char hexline[255];
+  char headbyte[30];
+  char hexline[512];
 
   memset(hexbyte, 0, sizeof(hexbyte));
   memset(hexline, 0, sizeof(hexline));
 
+  u16 length = *(u16*)&mem[2];
+
   int i, k = 0;
-  for (i = 0; i < count && count < sizeof(hexline); i++)
+  for (i = 0; i < count /*&& count < sizeof(hexline)*/; i++)
   {
     if (i == 3) {
     //  sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
-      sprintf(hexbyte, "%02X] length: %d", mem[i], count);
-      if (count > 4)
-        strcat(hexbyte, "\n   ");
+      if (length)
+        snprintf(hexbyte, 64, "%02X] length: %04x / %d", mem[i], count, count);
+      else
+        sprintf(hexbyte, "%02X] ", mem[i]);
+      if (count > 4) {
+        snprintf(headbyte, 30, "\n   %02X %02X %02X %02X ", mem[0], mem[1], mem[2], mem[3]);
+        strcat(hexbyte, headbyte);
+      }
     }
     else {
-      sprintf(hexbyte, "%02X ", mem[i]);
+      if ((i + 1) % 8 == 0)
+        snprintf(hexbyte, 64, "%02X  ", mem[i]);
+      else
+        snprintf(hexbyte, 64, "%02X ", mem[i]);
     }
     strcat(hexline, hexbyte);
 
@@ -78,64 +83,29 @@ void pr_hex_mark(const char* mem, int count, int mark)
       k++;
       switch (mark) {
       case PR_READ:
-        if (k == 1)
-          printk(KERN_INFO "r [%s\n", hexline); // print line to console
+        if (k == 1) {
+          if (length)
+            printk(KERN_INFO " r [%s\n", hexline); // print line to console
+          else
+            printk(KERN_ERR " r [%s mcu read error\n", hexline); // print line to console
+        }
         else
           printk(KERN_INFO "   %s\n", hexline); // print line to console
         break;
       case PR_WRITE:
         if (k == 1)
           printk(KERN_INFO "w [%s\n", hexline); // print line to console
-        else
+        else {
           printk(KERN_INFO "   %s\n", hexline); // print line to console
+        }
         break;
       default:
-        if (mark & PR_WRITE) {
-          printk(KERN_ERR " w %02x: %s\n", k, hexline); // print line to console
-        }
-        else {
-          printk(KERN_ERR " r %02x: %s\n", k, hexline); // print line to console
-        }
         break;
       }
       //syslog(LOG_INFO, "l%d: %s",k , hexline); // print line to syslog
       memset(hexline, 0, sizeof(hexline)); // clear hexline array
     }
   }
-}
-
-static ssize_t spidev_sync(struct ast_vhub* vhub, struct spi_message* message)
-{
-  int status;
-  struct spi_device* spi;
-
-  spin_lock_irq(&vhub->lock);
-  spi = vhub->spi;
-  spin_unlock_irq(&vhub->lock);
-
-  if (spi == NULL)
-    status = -ESHUTDOWN;
-  else
-    status = spi_sync(spi, message);
-
-  if (status == 0)
-    status = message->actual_length;
-
-  return status;
-}
-
-static inline ssize_t spidev_sync_write(struct ast_vhub* vhub, size_t len)
-{
-  struct spi_transfer	t = {
-      .tx_buf = vhub->transfer,
-      .len = len,
-      .speed_hz = vhub->spi->max_speed_hz,
-  };
-  struct spi_message	m;
-
-  spi_message_init(&m);
-  spi_message_add_tail(&t, &m);
-  return spidev_sync(vhub, &m);
 }
 
 void ast_vhub_done(struct ast_vhub_ep* ep, struct ast_vhub_req* req,  int status)
@@ -224,12 +194,12 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   {
     spi_cmd_t* cmd = (spi_cmd_t*)buffer;
     cmd_reg = cmd->reg.val;
-    UDCVDBG(vhub, "mcu read length:%d, crc:%x, reg:%x\n", cmd->length, cmd->crc8, cmd_reg);
-    pr_hex_mark(vhub->transfer, cmd->length, PR_READ);
+    // UDCVDBG(vhub, "mcu read length:%d\n", cmd->length);
+    pr_hex_mark(buffer, VHUB_SPI_HEADER, PR_READ);
     // check data
     if (cmd->length)
     {
-      memset(&tr, 0, sizeof(tr));
+     memset(&tr, 0, sizeof(tr));
       spi_message_init(&m);
       // data
       tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
@@ -240,7 +210,7 @@ int vusb_read_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
         if (!spi_sync(spi, &m) && crc8(vbus_crc_table, tr.rx_buf, cmd->length, 0) == cmd->crc8) {
           // set the reg back to the header, the other fields are correct  
           cmd->reg.val = cmd_reg;
-          return cmd->length;
+         return cmd->length;
         }
         else {
           UDCVDBG(vhub, "mcu read spi_sync error!\n");
@@ -259,39 +229,49 @@ int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length)
   struct spi_transfer t;
   struct spi_message msg;
 
+  mutex_lock_interruptible(&vhub->spi_read_mutex);
+
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
 
   // header reg, length, crc
   spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
 
+  // overlapping copy
+  memmove(cmd->data, buffer, length);
+
   // prepare the header
   cmd->reg.val = reg;
+  // crc over data
   cmd->crc8 = crc8(vbus_crc_table, cmd->data, length, 0);
   cmd->length = length;
 
   t.tx_buf = vhub->transfer;
-  t.len = cmd->length;
+  t.len = cmd->length + VHUB_SPI_HEADER;
   t.delay_usecs = 0;
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
-  pr_hex_mark(vhub->transfer, min(64, t.len), PR_WRITE);
+  pr_hex_mark(vhub->transfer, t.len, PR_WRITE);
   spi_message_add_tail(&t, &msg);
-  return !spi_sync(vhub->spi, &msg);
+  
+  int status = spi_sync(vhub->spi, &msg);
+  if (cmd->reg.bit.read) {
+    wait_event_interruptible_timeout(vhub->spi_read_queue,
+            gpio_get_value(GPIO_DATRDY_IRQ_PIN), 800);
+  }
+
+  mutex_unlock(&vhub->spi_read_mutex);
+
+  return !status;
 }
 
-#define GPIO_CLIENT_GPIO_IRQ 5
-#define GPIO_MCU_DATRDY_IRQ  5
-#define GPIO_MCU_ATTENTION_IRQ   6
-
-
-static irqreturn_t ast_vhub_irq_dtrdy_primary_handler(int irq, void* dev_id)
+static irqreturn_t ast_vhub_irq_primary_handler(int irq, void* dev_id)
 {
   struct ast_vhub* vhub = dev_id;
 
 /* Stale interrupt while tearing down */
-  if (vhub->irq_datrdy == irq || vhub->irq_error == irq)
+  if (vhub->irq_datrdy == irq || vhub->irq_listen == irq)
     return IRQ_WAKE_THREAD;
   return IRQ_NONE;
 }
@@ -306,23 +286,6 @@ struct work_data {
   int irqs_unhandled;
 };
 
-static void irq_worker(struct work_struct* work)
-{
-  struct work_data* data = (struct work_data*)work;
-  struct ast_vhub* vhub = data->vhub;
-
-  trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n", 
-              data->irq, data->irqs_unhandled, ++irq_called);
-  //clear and read
-  spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
-  cmd->length = VHUB_SPI_BUFFER_LENGTH>>1;
-  memset(vhub->transfer, 0, cmd->length);
-  if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, cmd->length)) {
-    cmd = (spi_cmd_t*)vhub->transfer;
-    pr_hex_mark(vhub->transfer, cmd->length + VHUB_SPI_HEADER, PR_READ);
-  }
-  kfree(data);
-}
 
 static irqreturn_t ast_vhub_irq_listen(int irq, void* dev_id)
 {
@@ -331,18 +294,37 @@ static irqreturn_t ast_vhub_irq_listen(int irq, void* dev_id)
 
   struct irq_desc* desc = irq_to_desc(irq);
   struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data && desc->irq_data.hwirq == GPIO_MCU_ATTENTION_IRQ)
+  if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
   {
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      UDCDBG(vhub, "mcu write/read: VUSB_DEVICE_IRQ\n");
-      trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
-        desc->irq_data.hwirq, desc->irqs_unhandled, 0);
-      vusb_write_buffer(vhub, WRITE_CMD_READ|VUSB_DEVICE_IRQ, vhub->transfer, VHUB_SPI_HEADER);
+      UDCDBG(vhub, "mcu ast write/read: VUSB_DEVICE_IRQ\n");
+      trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
+        desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
+      vusb_write_buffer(vhub, WRITE_CMD_READ|VUSB_DEVICE_IRQ, vhub->transfer, 0);
     }
   }
   return iret;
+}
+
+static void irq_worker(struct work_struct* work)
+{
+  struct work_data* data = (struct work_data*)work;
+  struct ast_vhub* vhub = data->vhub;
+
+  trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
+    data->irq, data->irqs_unhandled, ++irq_called);
+  //clear and read
+  spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
+  cmd->length = VHUB_SPI_BUFFER_LENGTH >> 1;
+  memset(vhub->transfer, 0, cmd->length);
+  if (vusb_read_buffer(vhub, WRITE_CMD_READ, vhub->transfer, cmd->length)) {
+    cmd = (spi_cmd_t*)vhub->transfer;
+    pr_hex_mark(vhub->transfer, cmd->length + VHUB_SPI_HEADER, PR_READ);
+  }
+  wake_up_interruptible(&vhub->spi_read_queue);
+  kfree(data);
 }
 
 static irqreturn_t ast_vhub_irq_dtrdy(int irq, void* dev_id)
@@ -352,7 +334,7 @@ static irqreturn_t ast_vhub_irq_dtrdy(int irq, void* dev_id)
 
   struct irq_desc* desc = irq_to_desc(irq);
   struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data && desc->irq_data.hwirq == GPIO_MCU_DATRDY_IRQ)
+  if (desc && data && desc->irq_data.hwirq == GPIO_DATRDY_IRQ_PIN)
   {
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
@@ -501,21 +483,26 @@ static int ast_vhub_probe(struct spi_device* spi)
     (vhub->spi->max_speed_hz + 500) / 1000);
 
   spin_lock_init(&vhub->lock);
+
   mutex_init(&vhub->spi_bus_mutex);
 
   vhub->port_irq_mask = GENMASK(VHUB_IRQ_DEV1_BIT + vhub->max_ports - 1,
     VHUB_IRQ_DEV1_BIT);
+
+  /* INTERRUPT spi read queue */
+  init_waitqueue_head(&vhub->spi_read_queue);
+  mutex_init(&vhub->spi_read_mutex);
 
   /* GPIO for mcu chip reset */
   vhub->gpiod_reset = devm_gpiod_get(&vhub->spi->dev, "reset", GPIOD_OUT_HIGH);
   dev_info(&vhub->spi->dev, "Reset gpio is defined as gpio:%x\n", vhub->gpiod_reset);
   gpiod_set_value(vhub->gpiod_reset, 1);
 
-  vhub->irq_datrdy = gpio_to_irq(GPIO_MCU_DATRDY_IRQ);
-  dev_info(&vhub->spi->dev, "GPIO for mcu dtrdy hwirq %d is irq %d.\n", GPIO_MCU_DATRDY_IRQ, vhub->irq_datrdy);
+  vhub->irq_datrdy = gpio_to_irq(GPIO_DATRDY_IRQ_PIN);
+  dev_info(&vhub->spi->dev, "GPIO for mcu dtrdy hwirq %d is irq %d.\n", GPIO_DATRDY_IRQ_PIN, vhub->irq_datrdy);
   // set the irq handler: list with "cat /proc/interrupts"
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_datrdy,
-    ast_vhub_irq_dtrdy_primary_handler, ast_vhub_irq_dtrdy, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
+    ast_vhub_irq_primary_handler, ast_vhub_irq_dtrdy, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request dtrdy hwirq interrupt\n");
@@ -523,13 +510,13 @@ static int ast_vhub_probe(struct spi_device* spi)
     goto err;
   }
 
-  vhub->irq_error = gpio_to_irq(GPIO_MCU_ATTENTION_IRQ);
-  dev_info(&vhub->spi->dev, "GPIO for mcu attention hwirq %d is irq %d.\n", GPIO_MCU_ATTENTION_IRQ, vhub->irq_error);
-  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_error, NULL,
+  vhub->irq_listen = gpio_to_irq(GPIO_LISTEN_IRQ_PIN);
+  dev_info(&vhub->spi->dev, "GPIO for mcu listen hwirq %d is irq %d.\n", GPIO_LISTEN_IRQ_PIN, vhub->irq_listen);
+  rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_listen, ast_vhub_irq_primary_handler,
        ast_vhub_irq_listen, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
   if (rc)
   {
-    dev_err(&vhub->spi->dev, "Failed to request attention hwirq interrupt\n");
+    dev_err(&vhub->spi->dev, "Failed to request listen hwirq interrupt\n");
     rc = -ENOMEM;
     goto err;
   }

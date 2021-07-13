@@ -1,1 +1,16 @@
 /build/**
+
+pseudo code
+
+spi_write_read
+	
+	mutex_lock
+	
+		wait_event_interruptible_timeout(vusb->waitq, gpio_get_value(GPIO_MCU_LISTEN_IRQ_PIN), HZ);
+			
+	mutex_unlock
+	
+
+pin_irq_listen
+
+	
