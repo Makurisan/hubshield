@@ -196,7 +196,7 @@
 
 /***********************************
 *                                  *
-* GPI definition for irq handling  *
+* GPIO definition for irq handling  *
 *                                  *
 ***********************************/
 
