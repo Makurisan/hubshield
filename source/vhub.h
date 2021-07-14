@@ -419,8 +419,7 @@ struct ast_vhub {
 	u8 *transfer;
   void __iomem* regs;
 
-  int gpio_irq;
-	int irq;
+	int irq_reset;
   int irq_datrdy;
   int irq_listen;
   struct gpio_desc* gpiod_reset;

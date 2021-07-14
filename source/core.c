@@ -313,8 +313,8 @@ static void irq_worker(struct work_struct* work)
   struct work_data* data = (struct work_data*)work;
   struct ast_vhub* vhub = data->vhub;
 
-  trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/call:%d\n",
-    data->irq, data->irqs_unhandled, ++irq_called);
+  trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
+    data->irq, data->irqs_unhandled, 0);
   //clear and read
   spi_cmd_t* cmd = (spi_cmd_t*)vhub->transfer;
   cmd->length = VHUB_SPI_BUFFER_LENGTH >> 1;
@@ -375,7 +375,8 @@ static int ast_vhub_remove(struct spi_device* spi)
   dev_info(&spi->dev, "Remove of v-hub.\n");
 
   /* disable the slave IRQ line */
-  disable_irq(vhub->gpio_irq);
+  disable_irq(vhub->irq_listen);
+  disable_irq(vhub->irq_datrdy);
 
   /* IRQ worker queue */
   flush_workqueue(irq_workerqueue);
@@ -463,13 +464,13 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->spi = spi;
   spi_set_drvdata(spi, vhub);
 
-  vhub->gpio_irq = spi->irq;
-  if (vhub->gpio_irq < 0)
+  if (spi->irq < 0)
   {
     dev_err(&vhub->spi->dev, "Irq missing in platform data");
     return -ENODEV;
   }
-  dev_info(&vhub->spi->dev, "SPI irq is defined as :%d\n", vhub->gpio_irq);
+
+  dev_info(&vhub->spi->dev, "SPI irq is defined as :%d\n", vhub->spi->irq);
 
    // spi defs
   vhub->spi->mode = SPI_MODE_0;
@@ -502,7 +503,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   dev_info(&vhub->spi->dev, "GPIO for mcu dtrdy hwirq %d is irq %d.\n", GPIO_DATRDY_IRQ_PIN, vhub->irq_datrdy);
   // set the irq handler: list with "cat /proc/interrupts"
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_datrdy,
-    ast_vhub_irq_primary_handler, ast_vhub_irq_dtrdy, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbsoc", vhub);
+    ast_vhub_irq_primary_handler, ast_vhub_irq_dtrdy, IRQF_TRIGGER_FALLING | IRQF_ONESHOT  | IRQF_SHARED | IRQF_NO_SUSPEND, "vusbdtrdy", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request dtrdy hwirq interrupt\n");
@@ -513,7 +514,7 @@ static int ast_vhub_probe(struct spi_device* spi)
   vhub->irq_listen = gpio_to_irq(GPIO_LISTEN_IRQ_PIN);
   dev_info(&vhub->spi->dev, "GPIO for mcu listen hwirq %d is irq %d.\n", GPIO_LISTEN_IRQ_PIN, vhub->irq_listen);
   rc = devm_request_threaded_irq(&vhub->spi->dev, vhub->irq_listen, ast_vhub_irq_primary_handler,
-       ast_vhub_irq_listen, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbsoc", vhub);
+       ast_vhub_irq_listen, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbirq", vhub);
   if (rc)
   {
     dev_err(&vhub->spi->dev, "Failed to request listen hwirq interrupt\n");
