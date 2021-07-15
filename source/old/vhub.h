@@ -620,6 +620,5 @@ void ast_vhub_dev_suspend(struct ast_vhub_dev *d);
 void ast_vhub_dev_resume(struct ast_vhub_dev *d);
 void ast_vhub_dev_reset(struct ast_vhub_dev *d);
 
-void pr_hex(const char *mem, int count);
 
 #endif /* __ASPEED_VHUB_H */

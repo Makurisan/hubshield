@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0+
 obj-m  := v-hub.o 
-v-hub-objs := hub.o core.o ep0.o epn.o crdev.o dev.o hub.o
+v-hub-objs := vusb_udc.o vusb_spi.o vusb_helper.o
 
 KERNEL_DIR ?= ~/rpi/linux-5.10.17-v7
 

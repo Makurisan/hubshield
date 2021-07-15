@@ -32,10 +32,12 @@
 				interrupts = <5 0 6 0>; /* IRQ_TYPE_EDGE_FALLING */
 				reset-gpio = <&gpio 24 1>; // GPIO_ACTIVE_HIGH
 				max-ports = <5>; // count of virtual hub ports
+				spi_dtrdy = <5>;  
+				spi_irq = <6>;  
 				endpoints = <15>; // count of hub generic endpoints
 				gpio-controller;
 				#gpio-cells = <3>;
-				spi-max-frequency = <8000000>;
+				spi-max-frequency = <12000000>;
 			};
 		};
 	};

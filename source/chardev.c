@@ -29,7 +29,7 @@
 #include <linux/of_gpio.h>
 #include <linux/regmap.h>
 #include <linux/random.h>
-#include "vhub.h"
+#include "vusb_udc.h"
 
 #define isdigit(c)	('0' <= (c) && (c) <= '9')
 
@@ -50,7 +50,6 @@
 #define WRITE_CMD_WRITE 0x80  // write bytes to mcu
 #define WRITE_CMD_READ  0x40  // read bytes from mcu
 #define WRITE_CMD_ERROR 0x20  // IRQ for error handling
-
 
 static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg);
 static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff_t* offset);
