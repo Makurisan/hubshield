@@ -16,6 +16,8 @@
 #define VUSB_SPI_CMD_READ    0x40
 #define VUSB_SPI_CMD_WRITE   0x80
 #define VUSB_SPI_DEVICE_IRQ  0x1a
+#define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
+
 
  /***********************************
  *                                  *
@@ -163,6 +165,7 @@
 #define VUSB_SPI_CMD_WR(c)	(VUSB_CMD(c) | (1 << 1))
 
 #define CRC8_TABLE_SIZE   256
+#define VUSB_MAX_CHAR_DEVICES 3
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
@@ -219,6 +222,11 @@ struct vusb_udc {
   struct wait_queue_head spi_read_queue;
 
   u8 crc_table[CRC8_TABLE_SIZE];
+
+  /* char device */
+  struct cdev cdev;
+  struct class* chardev_class;
+  int crdev_major;
 
   /* Per-port info */
   //struct ast_vhub_port* ports;

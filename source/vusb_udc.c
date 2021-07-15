@@ -30,6 +30,9 @@
 #define to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
 #define to_udc(g)		container_of((g), struct vusb_udc, gadget)
 
+extern const struct file_operations vusb_ops;
+int vusbchardev_uevent(struct device* dev, struct kobj_uevent_env* env);
+
 static const char driver_name[] = "vusb-udc";
 
 /* Forward declaration */
@@ -1193,6 +1196,23 @@ static int vusb_probe(struct spi_device *spi)
 	usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 	//vusb_start(udc);
 
+  // char device
+  dev_t usrdev;
+  alloc_chrdev_region(&usrdev, 0, VUSB_MAX_CHAR_DEVICES, "vusb");
+  udc->crdev_major = MAJOR(usrdev);
+  cdev_init(&udc->cdev, &vusb_ops);
+
+  rc = cdev_add(&udc->cdev, usrdev, VUSB_MAX_CHAR_DEVICES);
+  if (rc < 0) {
+    pr_warn("Couldn't cdev_add\n");
+    goto err;
+  }
+  udc->chardev_class = class_create(THIS_MODULE, "vusb");
+  udc->chardev_class->dev_uevent = vusbchardev_uevent;
+
+  device_create(udc->chardev_class, NULL, MKDEV(udc->crdev_major, 1), NULL, "vusb-%d", 1);
+  trace_printk("Succesfully initialized vhub.\n");
+
 	return 0;
 err:
   vusb_remove(spi);
@@ -1212,6 +1232,16 @@ static int vusb_remove(struct spi_device *spi)
 	spin_lock_irqsave(&udc->lock, flags);
 
 	kthread_stop(udc->thread_task);
+
+  // remove the char device
+  device_destroy(udc->chardev_class, MKDEV(udc->crdev_major, 1));
+  class_destroy(udc->chardev_class);
+
+  dev_t dev_id = MKDEV(udc->crdev_major, 0);
+  cdev_del(&udc->cdev);
+  unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
+
+  dev_info(&spi->dev, "Char device from v-hub removed.\n");
 
 	spin_unlock_irqrestore(&udc->lock, flags);
 

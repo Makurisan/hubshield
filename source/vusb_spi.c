@@ -26,7 +26,6 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
-
  // read the data from the MCU
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
@@ -110,9 +109,8 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   int status = spi_sync(udc->spi, &msg);
   if (cmd->reg.bit.read) {
     wait_event_interruptible_timeout(udc->spi_read_queue,
-      gpio_get_value(GPIO_DATRDY_IRQ_PIN), 800);
+      gpio_get_value(GPIO_DATRDY_IRQ_PIN), VUSB_SPI_DATRDY_TIMEOUT);
   }
-
   mutex_unlock(&udc->spi_read_mutex);
 
   return !status;

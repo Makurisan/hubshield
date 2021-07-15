@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
- * vhub -- Driver for usbshield SoC "vHub" USB gadget
+ * udc -- Driver for usbshield SoC "udc" USB gadget
  *
  * crdev.c - Character device handling
  *
@@ -47,17 +47,11 @@
 #define VUSB_DEVICE_ERROR 0x3e // diagnose
 #define VUSB_DEVICE_MAX 0x3f // max cmd nbr
 
-#define WRITE_CMD_WRITE 0x80  // write bytes to mcu
-#define WRITE_CMD_READ  0x40  // read bytes from mcu
-#define WRITE_CMD_ERROR 0x20  // IRQ for error handling
-
 static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg);
 static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff_t* offset);
 static int vusb_open(struct inode* inode, struct file* file);
 static int vusb_release(struct inode* inode, struct file* file);
 static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset);
-
-int vusb_write_buffer(struct ast_vhub* vhub, u8 reg, u8* buffer, u16 length);
 
 const struct file_operations vusb_ops = {
   .owner = THIS_MODULE,
@@ -74,23 +68,23 @@ typedef struct vusb_send {
   uint8_t length;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = {
-    { "p",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0, 0},
-    { "a",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1, 0},
-    { "m",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1, 4},
-    { "b",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0, 0},
-    { "r",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0, 0},
-    { "d",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1, 0},
-    { "c",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 0},
-    { "i",   /*cmd*/ WRITE_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0, 0},
-    { "e",   /*cmd*/ WRITE_CMD_WRITE | VUSB_DEVICE_ERROR,    "VUSB_DEVICE_ERROR",   /*port*/0, 0},
+    { "p",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0, 0},
+    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1, 0},
+    { "m",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1, 4},
+    { "b",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0, 0},
+    { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0, 0},
+    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1, 0},
+    { "c",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 0},
+    { "i",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0, 0},
+    { "e",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ERROR,    "VUSB_DEVICE_ERROR",   /*port*/0, 0},
 };
 
 static int vusb_open(struct inode* inode, struct file* file)
 {
-  struct ast_vhub* vhub;
+  struct vusb_udc* udc;
   //printk("vusb: Device open with %d possible cmds\n", sizeof(vusb_send_tab) / sizeof(vusb_send_t));
-  vhub = container_of(inode->i_cdev, struct ast_vhub, cdev);
-  file->private_data = vhub;
+  udc = container_of(inode->i_cdev, struct vusb_udc, cdev);
+  file->private_data = udc;
   return 0;
 }
 
@@ -113,8 +107,8 @@ static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff
 
 static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
 {
-  struct ast_vhub* vhub;
-  vhub = file->private_data;
+  struct vusb_udc* udc;
+  udc = file->private_data;
   const size_t maxdatalen = 120;
   uint8_t *data = kmalloc(maxdatalen, GFP_KERNEL);
   memset(data, 0, maxdatalen);
@@ -124,27 +118,27 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
   for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
-        memset(vhub->transfer, 0, VHUB_SPI_BUFFER_LENGTH);
-        if (vusb_send_tab[j].cmd & WRITE_CMD_WRITE) {
-          UDCDBG(vhub, "mcu write: %s, digit:%d", vusb_send_tab[j].cmdst, isdigit(data[i + 1]));
+        memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
+        if (vusb_send_tab[j].cmd & VUSB_SPI_CMD_WRITE) {
+          UDCVDBG(udc, "mcu write: %s, digit:%d", vusb_send_tab[j].cmdst, isdigit(data[i + 1]));
         }
         else {
-          UDCDBG(vhub, "mcu write/read: %s", vusb_send_tab[j].cmdst);
+          UDCVDBG(udc, "mcu write/read: %s", vusb_send_tab[j].cmdst);
         }
         u16 length = vusb_send_tab[j].length;
         u16 inlength;
         if (isdigit(data[i + 1]) && 0 == kstrtou16(&data[i + 1], 10, &inlength)) {
           length = inlength;
-          if (length > VHUB_SPI_BUFFER_LENGTH>>1) {
-            length -= VHUB_SPI_BUFFER_LENGTH >> 1;
-            get_random_bytes(vhub->transfer, length);
+          if (length > VUSB_SPI_BUFFER_LENGTH >>1) {
+            length -= VUSB_SPI_BUFFER_LENGTH >> 1;
+            get_random_bytes(udc->transfer, length);
           } else {
             size_t i;
             for (i = 0; i < length; i++)
-              vhub->transfer[i] = i + 0x20;
+              udc->transfer[i] = i + 0x20;
           }
         }
-        vusb_write_buffer(vhub, vusb_send_tab[j].cmd, vhub->transfer, length);
+        vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, length);
         msleep(400);
         break;
       }
