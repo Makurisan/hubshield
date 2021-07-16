@@ -54,12 +54,13 @@ typedef struct vusb_send {
   uint8_t length;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = {
-    { "p",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0, 0},
-    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1, 0},
-    { "m",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1, 4},
-    { "b",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0, 0},
     { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0, 0},
-    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_DETACH,   "VUSB_DEVICE_DETACH",  /*port*/1, 0},
+    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0, 0},
+    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWDETACH, "VUSB_DEVICE_HWDETACH",/*port*/1, 0},
+
+    { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1, 0},
+    { "p",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0, 0},
+    { "m",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1, 4},
     { "c",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 0},
     { "i",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0, 0},
     { "e",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ERROR,    "VUSB_DEVICE_ERROR",   /*port*/0, 0},

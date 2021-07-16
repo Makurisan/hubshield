@@ -26,6 +26,44 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
+irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
+{
+  struct vusb_udc* udc = dev_id;
+  irqreturn_t iret = IRQ_HANDLED;
+
+  struct irq_desc* desc = irq_to_desc(irq);
+  struct irq_data* data = irq_desc_get_irq_data(desc);
+  if (desc && data && desc->irq_data.hwirq == GPIO_DATRDY_IRQ_PIN)
+  {
+    struct irq_chip* chip = irq_desc_get_chip(desc);
+    if (chip)
+    {
+      //trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
+      //  desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
+      //clear and read
+      spi_cmd_t *cmd = (spi_cmd_t*)udc->spitransfer;
+      cmd->length = VUSB_SPI_BUFFER_LENGTH >> 1;
+      memset(udc->spitransfer, 0, cmd->length);
+      if (vusb_read_buffer(udc, VUSB_SPI_CMD_READ, udc->spitransfer, cmd->length)) {
+        pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PR_READ);
+      // IRQ reg data
+        if (cmd->reg.bit.reg == VUSB_REG_GET_IRQDATA) {
+          memmove(udc->irq_data, cmd->data, cmd->length);
+          //UDCVDBG(udc, "vusb_spi_dtrdy: VUSB_REG_GET_IRQDATA r1:%d, r2:%d\n",
+          //               udc->irq_data[0], udc->irq_data[1]);
+          if (udc->irq_data[0] & udc->irq_data[1]) {
+            if (udc->thread_task &&
+              udc->thread_task->state != TASK_RUNNING)
+              wake_up_process(udc->thread_task);
+          }
+        }
+      }
+      wake_up_interruptible(&udc->spi_read_queue);
+    }
+  }
+  return iret;
+}
+
  // read the data from the MCU
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
@@ -58,10 +96,15 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
       {
         tr.len = cmd->length;
         spi_message_add_tail(&tr, &m);
-        if (!spi_sync(spi, &m) && crc8(udc->crc_table, tr.rx_buf, cmd->length, 0) == cmd->crc8) {
-          // set the reg back to the header, the other fields are correct  
-          cmd->reg.val = cmd_reg;
-          return cmd->length;
+        if (!spi_sync(spi, &m)) {
+          if(crc8(udc->crc_table, tr.rx_buf, cmd->length, 0) == cmd->crc8) {
+           // set the reg back to the header, the other fields are correct  
+            cmd->reg.val = cmd_reg;
+            return cmd->length;
+          }
+          else {
+            UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+          }
         }
         else {
           UDCVDBG(udc, "mcu read spi_sync error!\n");
@@ -86,9 +129,9 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   spi_message_init(&msg);
 
   // header reg, length, crc
-  spi_cmd_t* cmd = (spi_cmd_t*)udc->transfer;
+  spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
 
-  // overlapping copy
+  // overlapping copy and length automatically checked
   memmove(cmd->data, buffer, length);
 
   // prepare the header
@@ -97,13 +140,13 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   cmd->crc8 = crc8(udc->crc_table, cmd->data, length, 0);
   cmd->length = length;
 
-  t.tx_buf = udc->transfer;
+  t.tx_buf = udc->spitransfer;
   t.len = cmd->length + VUSB_SPI_HEADER;
   t.delay_usecs = 0;
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
-  pr_hex_mark(udc->transfer, t.len, PR_WRITE);
+  pr_hex_mark(udc->spitransfer, t.len, PR_WRITE);
   spi_message_add_tail(&t, &msg);
 
   int status = spi_sync(udc->spi, &msg);

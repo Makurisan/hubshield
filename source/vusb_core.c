@@ -35,121 +35,6 @@ static const char driver_name[] = "vusb-udc";
 /* Forward declaration */
 static int vusb_remove(struct spi_device* spi);
 
-static void spi_ack_ctrl(struct vusb_udc *udc)
-{
-	struct spi_device *spi = udc->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 txdata[1];
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	txdata[0] = VUSB_ACKSTAT;
-	transfer.tx_buf = txdata;
-	transfer.len = 1;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
-}
-
-static u8 spi_rd8_ack(struct vusb_udc *udc, u8 reg, int actstat)
-{
-	struct spi_device *spi = udc->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 txdata[2], rxdata[2];
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	txdata[0] = VUSB_SPI_CMD_RD(reg) | (actstat ? VUSB_ACKSTAT : 0);
-	transfer.tx_buf = txdata;
-	transfer.rx_buf = rxdata;
-	transfer.len = 2;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
-
-	return rxdata[1];
-}
-
-static u8 spi_rd8(struct vusb_udc *udc, u8 reg)
-{
-	return spi_rd8_ack(udc, reg, 0);
-}
-
-static void spi_wr8_ack(struct vusb_udc *udc, u8 reg, u8 val, int actstat)
-{
-	struct spi_device *spi = udc->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 txdata[2];
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	txdata[0] = VUSB_SPI_CMD_WR(reg) | (actstat ? VUSB_ACKSTAT : 0);
-	txdata[1] = val;
-
-	transfer.tx_buf = txdata;
-	transfer.len = 2;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
-}
-
-static void spi_wr8(struct vusb_udc *udc, u8 reg, u8 val)
-{
-	spi_wr8_ack(udc, reg, val, 0);
-}
-
-static void spi_rd_buf(struct vusb_udc *udc, u8 reg, void *buf, u8 len)
-{
-	struct spi_device *spi = udc->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 local_buf[VUSB_EP_MAX_PACKET + 1] = {};
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	local_buf[0] = VUSB_SPI_CMD_RD(reg);
-	transfer.tx_buf = &local_buf[0];
-	transfer.rx_buf = &local_buf[0];
-	transfer.len = len + 1;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
-
-	memcpy(buf, &local_buf[1], len);
-}
-
-static void spi_wr_buf(struct vusb_udc *udc, u8 reg, void *buf, u8 len)
-{
-	struct spi_device *spi = udc->spi;
-	struct spi_transfer transfer;
-	struct spi_message msg;
-	u8 local_buf[VUSB_EP_MAX_PACKET + 1] = {};
-
-	memset(&transfer, 0, sizeof(transfer));
-
-	spi_message_init(&msg);
-
-	local_buf[0] = VUSB_SPI_CMD_WR(reg);
-	memcpy(&local_buf[1], buf, len);
-
-	transfer.tx_buf = local_buf;
-	transfer.len = len + 1;
-
-	spi_message_add_tail(&transfer, &msg);
-	spi_sync(spi, &msg);
-}
-
 static int spi_vusb_enable(struct vusb_ep *ep)
 {
 	struct vusb_udc *udc = ep->udc;
@@ -165,8 +50,8 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 	if (!todo || ep->id == 0)
 		return false;
 
-	epien = spi_rd8(udc, VUSB_REG_EPIEN);
-	epdis = spi_rd8(udc, VUSB_REG_CLRTOGS);
+	//epien = spi_rd8(udc, VUSB_REG_EPIEN);
+	//epdis = spi_rd8(udc, VUSB_REG_CLRTOGS);
 
 	if (todo == ENABLE) {
 		epdis &= ~BIT(ep->id + 4);
@@ -176,8 +61,8 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 		epien &= ~BIT(ep->id + 1);
 	}
 
-	spi_wr8(udc, VUSB_REG_CLRTOGS, epdis);
-	spi_wr8(udc, VUSB_REG_EPIEN, epien);
+	//spi_wr8(udc, VUSB_REG_CLRTOGS, epdis);
+	//spi_wr8(udc, VUSB_REG_EPIEN, epien);
 
 	return true;
 }
@@ -197,7 +82,7 @@ static int spi_vusb_stall(struct vusb_ep *ep)
 	if (!todo || ep->id == 0)
 		return false;
 
-	epstalls = spi_rd8(udc, VUSB_REG_EPSTALLS);
+	//epstalls = spi_rd8(udc, VUSB_REG_EPSTALLS);
 	if (todo == STALL) {
 		ep->halted = 1;
 		epstalls |= BIT(ep->id + 1);
@@ -206,46 +91,14 @@ static int spi_vusb_stall(struct vusb_ep *ep)
 
 		ep->halted = 0;
 		epstalls &= ~BIT(ep->id + 1);
-		clrtogs = spi_rd8(udc, VUSB_REG_CLRTOGS);
+		//clrtogs = spi_rd8(udc, VUSB_REG_CLRTOGS);
 		clrtogs |= BIT(ep->id + 1);
-		spi_wr8(udc, VUSB_REG_CLRTOGS, clrtogs);
+		//spi_wr8(udc, VUSB_REG_CLRTOGS, clrtogs);
 	}
-	spi_wr8(udc, VUSB_REG_EPSTALLS, epstalls | ACKSTAT);
+	//spi_wr8(udc, VUSB_REG_EPSTALLS, epstalls | ACKSTAT);
 
 	return true;
 }
-
-static int spi_vusb_rwkup(struct vusb_udc *udc)
-{
-	unsigned long flags;
-	int wake_remote;
-	u8 usbctl;
-
-	spin_lock_irqsave(&udc->lock, flags);
-	wake_remote = udc->todo & REMOTE_WAKEUP;
-	udc->todo &= ~REMOTE_WAKEUP;
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-	if (!wake_remote || !udc->suspended)
-		return false;
-
-	/* Set Remote-WkUp Signal*/
-	usbctl = spi_rd8(udc, VUSB_REG_USBCTL);
-	usbctl |= SIGRWU;
-	spi_wr8(udc, VUSB_REG_USBCTL, usbctl);
-
-	msleep_interruptible(5);
-
-	/* Clear Remote-WkUp Signal*/
-	usbctl = spi_rd8(udc, VUSB_REG_USBCTL);
-	usbctl &= ~SIGRWU;
-	spi_wr8(udc, VUSB_REG_USBCTL, usbctl);
-
-	udc->suspended = false;
-
-	return true;
-}
-
 
 static void __vusb_stop(struct vusb_udc *udc)
 {
@@ -257,15 +110,15 @@ static void __vusb_stop(struct vusb_udc *udc)
 		vusb_nuke(&udc->ep[i], -ECONNRESET);
 
 	/* Disable IRQ to CPU */
-	spi_wr8(udc, VUSB_REG_CPUCTL, 0);
+	//spi_wr8(udc, VUSB_REG_CPUCTL, 0);
 
-	val = spi_rd8(udc, VUSB_REG_USBCTL);
+	//val = spi_rd8(udc, VUSB_REG_USBCTL);
 	val |= PWRDOWN;
 	if (udc->is_selfpowered)
 		val &= ~HOSCSTEN;
 	else
 		val |= HOSCSTEN;
-	spi_wr8(udc, VUSB_REG_USBCTL, val);
+	//spi_wr8(udc, VUSB_REG_USBCTL, val);
 }
 
 static void __vusb_start(struct vusb_udc *udc)
@@ -278,37 +131,37 @@ static void __vusb_start(struct vusb_udc *udc)
 	msleep_interruptible(250);
 
 	/* configure SPI */
-	spi_wr8(udc, VUSB_REG_PINCTL, FDUPSPI);
+	//spi_wr8(udc, VUSB_REG_PINCTL, FDUPSPI);
 
 	/* Chip Reset */
-	spi_wr8(udc, VUSB_REG_USBCTL, CHIPRES);
+	//spi_wr8(udc, VUSB_REG_USBCTL, CHIPRES);
 	msleep_interruptible(5);
-	spi_wr8(udc, VUSB_REG_USBCTL, 0);
+	//spi_wr8(udc, VUSB_REG_USBCTL, 0);
 
 	/* Poll for OSC to stabilize */
 	while (1) {
-		val = spi_rd8(udc, VUSB_REG_USBIRQ);
+		//val = spi_rd8(udc, VUSB_REG_USBIRQ);
 		if (val & OSCOKIRQ)
 			break;
 		cond_resched();
 	}
 
 	/* Enable PULL-UP only when Vbus detected */
-	val = spi_rd8(udc, VUSB_REG_USBCTL);
+	//val = spi_rd8(udc, VUSB_REG_USBCTL);
 	val |= VBGATE | CONNECT;
-	spi_wr8(udc, VUSB_REG_USBCTL, val);
+	//spi_wr8(udc, VUSB_REG_USBCTL, val);
 
 	val = URESDNIRQ | URESIRQ;
 	if (udc->is_selfpowered)
 		val |= NOVBUSIRQ;
-	spi_wr8(udc, VUSB_REG_USBIEN, val);
+	//spi_wr8(udc, VUSB_REG_USBIEN, val);
 
 	/* Enable only EP0 interrupts */
 	val = IN0BAVIRQ | OUT0DAVIRQ | SUDAVIRQ;
-	spi_wr8(udc, VUSB_REG_EPIEN, val);
+	//spi_wr8(udc, VUSB_REG_EPIEN, val);
 
 	/* Enable IRQ to CPU */
-	spi_wr8(udc, VUSB_REG_CPUCTL, IE);
+	//spi_wr8(udc, VUSB_REG_CPUCTL, IE);
 }
 
 static int vusb_start(struct vusb_udc *udc)
@@ -384,12 +237,12 @@ static void vusb_getstatus(struct vusb_udc *udc)
 	}
 
 	status = cpu_to_le16(status);
-	spi_wr_buf(udc, VUSB_REG_EP0FIFO, &status, 2);
-	spi_wr8_ack(udc, VUSB_REG_EP0BC, 2, 1);
+	//spi_wr_buf(udc, VUSB_REG_EP0FIFO, &status, 2);
+	//spi_wr8_ack(udc, VUSB_REG_EP0BC, 2, 1);
 	return;
 stall:
 	dev_err(udc->dev, "Can't respond to getstatus request\n");
-	spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
+	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
 static void vusb_set_clear_feature(struct vusb_udc *udc)
@@ -409,7 +262,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 		else
 			udc->remote_wkp = 0;
 
-		return spi_ack_ctrl(udc);
+		//return spi_ack_ctrl(udc);
+    return;
 
 	case USB_RECIP_ENDPOINT:
 		if (udc->setup.wValue != USB_ENDPOINT_HALT)
@@ -433,14 +287,14 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 	}
 
 	dev_err(udc->dev, "Can't respond to SET/CLEAR FEATURE\n");
-	spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
+	////spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
 static void vusb_handle_setup(struct vusb_udc *udc)
 {
 	struct usb_ctrlrequest setup;
 
-	spi_rd_buf(udc, VUSB_REG_SUDFIFO, (void *)&setup, 8);
+	//spi_rd_buf(udc, VUSB_REG_SUDFIFO, (void *)&setup, 8);
 
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
@@ -462,7 +316,7 @@ static void vusb_handle_setup(struct vusb_udc *udc)
 				USB_TYPE_STANDARD | USB_RECIP_DEVICE)) {
 			break;
 		}
-		spi_rd8_ack(udc, VUSB_REG_FNADDR, 1);
+		//spi_rd8_ack(udc, VUSB_REG_FNADDR, 1);
 		dev_dbg(udc->dev, "Assigned Address=%d\n", udc->setup.wValue);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
@@ -478,8 +332,8 @@ static void vusb_handle_setup(struct vusb_udc *udc)
 
 	if (udc->driver->setup(&udc->gadget, &setup) < 0) {
 		/* Stall EP0 */
-		spi_wr8(udc, VUSB_REG_EPSTALLS,
-			STLEP0IN | STLEP0OUT | STLSTAT);
+		//spi_wr8(udc, VUSB_REG_EPSTALLS,
+		//STLEP0IN | STLEP0OUT | STLSTAT);
 	}
 }
 
@@ -526,15 +380,15 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 	done = 0;
 	if (in) {
 		prefetch(buf);
-		spi_wr_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
-		spi_wr8(udc, VUSB_REG_EP0BC + ep_id, length);
+		//spi_wr_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
+		//spi_wr8(udc, VUSB_REG_EP0BC + ep_id, length);
 		if (length < psz)
 			done = 1;
 	} else {
-		psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
+		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		length = min(length, psz);
 		prefetchw(buf);
-		spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
+		//spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
 	}
@@ -552,8 +406,8 @@ xfer_done:
 		list_del_init(&req->queue);
 		spin_unlock_irqrestore(&ep->lock, flags);
 
-		if (ep_id == 0)
-			spi_ack_ctrl(udc);
+		//if (ep_id == 0)
+		//	spi_ack_ctrl(udc);
 
 		vusb_req_done(req, 0);
 	}
@@ -563,98 +417,75 @@ xfer_done:
 
 static int vusb_handle_irqs(struct vusb_udc *udc)
 {
-	u8 epien, epirq, usbirq, usbien, reg[4];
+	u8 usbirq, usbien;
 	bool ret = false;
 
-	spi_rd_buf(udc, VUSB_REG_EPIRQ, reg, 4);
-	epirq = reg[0];
-	epien = reg[1];
-	usbirq = reg[2];
-	usbien = reg[3];
+  usbirq = udc->irq_data[0];
+  usbien = udc->irq_data[1];
 
 	usbirq &= usbien;
-	epirq &= epien;
 
-	if (epirq & SUDAVIRQ) {
-		spi_wr8(udc, VUSB_REG_EPIRQ, SUDAVIRQ);
-		vusb_handle_setup(udc);
-		return true;
-	}
+#define URESIRQ		BIT(1) // reset end
 
-	if (usbirq & VBUSIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, VBUSIRQ);
-		dev_dbg(udc->dev, "Cable plugged in\n");
+	if (usbirq & URESIRQ) {
+    UDCVDBG(udc, "Reset detected\n");
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_CLR_IRQDATA, udc->irq_data, 1);
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_DEVICE_HWATTACH, udc->spitransfer, 0);
+    udc->irq_data[0] &= ~URESIRQ;
 		return true;
 	}
 
 	if (usbirq & NOVBUSIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
+		//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
 		dev_dbg(udc->dev, "Cable pulled out\n");
 		return true;
 	}
 
-	if (usbirq & URESIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, URESIRQ);
-		dev_dbg(udc->dev, "USB Reset - Start\n");
-		return true;
-	}
-
 	if (usbirq & URESDNIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
-		dev_dbg(udc->dev, "USB Reset - END\n");
-		spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
-		spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
-			| OUT0DAVIRQ);
+		//spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
+		dev_dbg(udc->dev, "USB Reset\n");
+		//spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
+		//spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
+		//	| OUT0DAVIRQ);
 		return true;
 	}
-
-	if (usbirq & SUSPIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, SUSPIRQ);
-		dev_dbg(udc->dev, "USB Suspend - Enter\n");
-		udc->suspended = true;
-		return true;
-	}
-
-	if (usbirq & BUSACTIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, BUSACTIRQ);
-		dev_dbg(udc->dev, "USB Suspend - Exit\n");
-		udc->suspended = false;
-		return true;
-	}
-
-	if (usbirq & RWUDNIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, RWUDNIRQ);
-		dev_dbg(udc->dev, "Asked Host to wakeup\n");
-		return true;
-	}
-
-	if (usbirq & OSCOKIRQ) {
-		spi_wr8(udc, VUSB_REG_USBIRQ, OSCOKIRQ);
-		dev_dbg(udc->dev, "Osc stabilized, start work\n");
-		return true;
-	}
-
-	if (epirq & OUT0DAVIRQ && vusb_do_data(udc, 0, 0)) {
-		spi_wr8_ack(udc, VUSB_REG_EPIRQ, OUT0DAVIRQ, 1);
-		ret = true;
-	}
-
-	if (epirq & IN0BAVIRQ && vusb_do_data(udc, 0, 1))
-		ret = true;
-
-	if (epirq & OUT1DAVIRQ && vusb_do_data(udc, 1, 0)) {
-		spi_wr8_ack(udc, VUSB_REG_EPIRQ, OUT1DAVIRQ, 1);
-		ret = true;
-	}
-
-	if (epirq & IN2BAVIRQ && vusb_do_data(udc, 2, 1))
-		ret = true;
-
-	if (epirq & IN3BAVIRQ && vusb_do_data(udc, 3, 1))
-		ret = true;
 
 	return ret;
 }
+
+static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
+{
+  struct vusb_udc* udc = dev_id;
+  irqreturn_t iret = IRQ_HANDLED;
+
+  struct irq_desc* desc = irq_to_desc(irq);
+  struct irq_data* data = irq_desc_get_irq_data(desc);
+  if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
+  {
+    struct irq_chip* chip = irq_desc_get_chip(desc);
+    if (chip)
+    {
+      //chip->irq_ack(data);
+#define REG_USBIRQ	3
+#define REG_IRQ_ELEMENTS 12
+
+      UDCVDBG(udc, "vusb_mcu_irq: IRQ arrived\n");
+      //trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
+      //  desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
+      vusb_req_map_t* reg = (vusb_req_map_t*)udc->transfer;
+      reg->offset = REG_USBIRQ;
+      reg->length = REG_IRQ_ELEMENTS;
+      vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_GET_IRQDATA,
+        udc->transfer, sizeof(vusb_req_map_t));
+      if ((udc->todo & ENABLE_IRQ) == 0) {
+        disable_irq_nosync(udc->mcu_irq);
+        udc->todo |= ENABLE_IRQ;
+      }
+    }
+  }
+  return iret;
+}
+
 
 static int vusb_thread(void *dev_id)
 {
@@ -668,10 +499,10 @@ static int vusb_thread(void *dev_id)
 			ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
 
 			set_current_state(TASK_INTERRUPTIBLE);
-
-			spin_lock_irqsave(&udc->lock, flags);
+      spin_lock_irqsave(&udc->lock, flags);
 			if (udc->todo & ENABLE_IRQ) {
-				enable_irq(spi->irq);
+        //UDCVDBG(udc, "vusb_thread: mcu enable_irq\n");
+        enable_irq(udc->mcu_irq);
 				udc->todo &= ~ENABLE_IRQ;
 			}
 			spin_unlock_irqrestore(&udc->lock, flags);
@@ -686,31 +517,26 @@ static int vusb_thread(void *dev_id)
 		if (!udc->softconnect)
 			goto loop;
 
-		if (vusb_start(udc)) {
-			loop_again = 1;
-			goto loop;
-		}
+		//if (vusb_start(udc)) {
+		//	loop_again = 1;
+		//	goto loop;
+		//}
 
 		if (vusb_handle_irqs(udc)) {
 			loop_again = 1;
 			goto loop;
 		}
 
-		if (spi_vusb_rwkup(udc)) {
-			loop_again = 1;
-			goto loop;
-		}
+		//vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
 
-		vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
+		//for (i = 1; i < VUSB_MAX_EPS; i++) {
+		//	struct vusb_ep *ep = &udc->ep[i];
 
-		for (i = 1; i < VUSB_MAX_EPS; i++) {
-			struct vusb_ep *ep = &udc->ep[i];
-
-			if (spi_vusb_enable(ep))
-				loop_again = 1;
-			if (spi_vusb_stall(ep))
-				loop_again = 1;
-		}
+		//	if (spi_vusb_enable(ep))
+		//		loop_again = 1;
+		//	if (spi_vusb_stall(ep))
+		//		loop_again = 1;
+		//}
 loop:
 		mutex_unlock(&udc->spi_bus_mutex);
 	}
@@ -793,55 +619,6 @@ static const struct usb_gadget_ops vusb_udc_ops = {
 	.wakeup		= vusb_wakeup,
 };
 
-static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
-{
-  struct vusb_udc* udc = dev_id;
-  irqreturn_t iret = IRQ_HANDLED;
-
-  struct irq_desc* desc = irq_to_desc(irq);
-  struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
-  {
-    struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip)
-    {
-      UDCVDBG(udc, "mcu ast write/read: VUSB_DEVICE_IRQ\n");
-      trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
-        desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
-      vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_SPI_DEVICE_IRQ, udc->transfer, 0);
-    }
-  }
-  return iret;
-}
-
-static irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
-{
-  struct vusb_udc* udc = dev_id;
-  irqreturn_t iret = IRQ_HANDLED;
-
-  struct irq_desc* desc = irq_to_desc(irq);
-  struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data && desc->irq_data.hwirq == GPIO_DATRDY_IRQ_PIN)
-  {
-    struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip)
-    {
-      trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
-        desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
-      //clear and read
-      spi_cmd_t* cmd = (spi_cmd_t*)udc->transfer;
-      cmd->length = VUSB_SPI_BUFFER_LENGTH >> 1;
-      memset(udc->transfer, 0, cmd->length);
-      if (vusb_read_buffer(udc, VUSB_SPI_CMD_READ, udc->transfer, cmd->length)) {
-        cmd = (spi_cmd_t*)udc->transfer;
-        pr_hex_mark(udc->transfer, cmd->length + VUSB_SPI_HEADER, PR_READ);
-      }
-      wake_up_interruptible(&udc->spi_read_queue);
-    }
-  }
-  return iret;
-}
-
 static int vusb_probe(struct spi_device *spi)
 {
 	struct vusb_udc *udc;
@@ -912,6 +689,13 @@ static int vusb_probe(struct spi_device *spi)
     dev_err(&spi->dev, "Unable to allocate Hub transfer buffer.\n");
     return -ENOMEM;
   }
+  udc->spitransfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
+    sizeof(*udc->spitransfer), GFP_KERNEL);
+  if (!udc->spitransfer)
+  {
+    dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
+    return -ENOMEM;
+  }
 
   /* Init crc8 */
   crc8_populate_msb(udc->crc_table, 0x7);
@@ -955,6 +739,8 @@ static int vusb_probe(struct spi_device *spi)
 
 	udc->is_selfpowered = 1;
 	udc->todo |= UDC_START;
+  udc->softconnect = true;
+
 	usb_udc_vbus_handler(&udc->gadget, true);
 	usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 	//vusb_start(udc);

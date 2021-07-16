@@ -15,19 +15,19 @@
 
 #define VUSB_SPI_CMD_READ    0x40
 #define VUSB_SPI_CMD_WRITE   0x80
-#define VUSB_SPI_DEVICE_IRQ  0x1a
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
 #define VUSB_DEVICE_PING      0x11
 #define VUSB_DEVICE_RESET     0x12
-#define VUSB_DEVICE_ATTACH    0x13
-#define VUSB_DEVICE_DETACH    0x14
-#define VUSB_DEVICE_MEMORY    0x15
+#define VUSB_DEVICE_MEMORY    0x13
+#define VUSB_DEVICE_ATTACH    0x14
+#define VUSB_DEVICE_HWDETACH  0x15
 #define VUSB_DEVICE_HWATTACH  0x16
 #define VUSB_DEVICE_DATA      0x17
 #define VUSB_DEVICE_HEADER    0x18 // the header with the length field
 #define VUSB_DEVICE_CLEARSCRN 0x19
-#define VUSB_DEVICE_IRQ       0x20
+#define VUSB_REG_GET_IRQDATA	0x1a
+#define VUSB_REG_CLR_IRQDATA  0x1b
 
 #define VUSB_DEVICE_ERROR 0x3e // diagnose
 #define VUSB_DEVICE_MAX 0x3f // max cmd nbr
@@ -183,6 +183,12 @@
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
+// register data map
+typedef struct vusb_req_map {
+  u8 offset;
+  u8 length;
+}vusb_req_map_t;
+
 struct vusb_req {
   struct usb_request usb_req;
   struct list_head queue;
@@ -210,6 +216,7 @@ typedef union {
   } bit;
   u8 val;
 } spi_reg_t;
+#pragma pack()
 
 #pragma pack(8)
 typedef struct vusb_spi_cmd {
@@ -225,6 +232,8 @@ struct vusb_udc {
   /* SPI master */
   struct spi_device* spi;
   /* SPI transfer buffer */
+  u8 irq_data[12];
+  u8* spitransfer;
   u8* transfer;
 
   /* GPIO SPI IRQs */
@@ -282,5 +291,6 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_eps_init(struct vusb_udc* udc);
 void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
+irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
 #endif /* __VUSB_UDC_H */
