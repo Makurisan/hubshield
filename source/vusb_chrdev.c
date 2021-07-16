@@ -2,9 +2,9 @@
 /*
  * udc -- Driver for usbshield SoC "udc" USB gadget
  *
- * crdev.c - Character device handling
+ * vusb_chrdev.c - Character device handling
  *
- * Copyright 2017 IBM Corporation
+ * Copyright 2021 IBM Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -33,31 +33,17 @@
 
 #define isdigit(c)	('0' <= (c) && (c) <= '9')
 
-#define VUSB_DEVICE_PING      0x11
-#define VUSB_DEVICE_RESET     0x12
-#define VUSB_DEVICE_ATTACH    0x13
-#define VUSB_DEVICE_DETACH    0x14
-#define VUSB_DEVICE_MEMORY    0x15
-#define VUSB_DEVICE_HWATTACH  0x16
-#define VUSB_DEVICE_DATA      0x17
-#define VUSB_DEVICE_HEADER    0x18 // the header with the length field
-#define VUSB_DEVICE_CLEARSCRN 0x19
-#define VUSB_DEVICE_IRQ       0x20
-
-#define VUSB_DEVICE_ERROR 0x3e // diagnose
-#define VUSB_DEVICE_MAX 0x3f // max cmd nbr
-
 static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg);
-static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff_t* offset);
-static int vusb_open(struct inode* inode, struct file* file);
+static ssize_t vusb_chrdev_read(struct file* file, char __user* buf, size_t count, loff_t* offset);
+static int vusb_chrdev_open(struct inode* inode, struct file* file);
 static int vusb_release(struct inode* inode, struct file* file);
-static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset);
+static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size_t count, loff_t* offset);
 
 const struct file_operations vusb_ops = {
   .owner = THIS_MODULE,
-  .open = vusb_open,
-  .write = vusb_write,
-  .read = vusb_read,
+  .open = vusb_chrdev_open,
+  .write = vusb_chrdev_write,
+  .read = vusb_chrdev_read,
 };
 
 typedef struct vusb_send {
@@ -79,7 +65,7 @@ const vusb_send_t vusb_send_tab[] = {
     { "e",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ERROR,    "VUSB_DEVICE_ERROR",   /*port*/0, 0},
 };
 
-static int vusb_open(struct inode* inode, struct file* file)
+static int vusb_chrdev_open(struct inode* inode, struct file* file)
 {
   struct vusb_udc* udc;
   //printk("vusb: Device open with %d possible cmds\n", sizeof(vusb_send_tab) / sizeof(vusb_send_t));
@@ -99,13 +85,13 @@ static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg)
   return 0;
 }
 
-static ssize_t vusb_read(struct file* file, char __user* buf, size_t count, loff_t* offset)
+static ssize_t vusb_chrdev_read(struct file* file, char __user* buf, size_t count, loff_t* offset)
 {
   printk("vusb: Device read");
   return 0;
 }
 
-static ssize_t vusb_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
+static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
 {
   struct vusb_udc* udc;
   udc = file->private_data;
@@ -148,7 +134,7 @@ static ssize_t vusb_write(struct file* file, const char __user* buf, size_t coun
   return count;
 }
 
-int vusbchardev_uevent(struct device* dev, struct kobj_uevent_env* env)
+int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env)
 {
   add_uevent_var(env, "DEVMODE=%#o", 0666);
   return 0;

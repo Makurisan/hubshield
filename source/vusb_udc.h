@@ -18,6 +18,20 @@
 #define VUSB_SPI_DEVICE_IRQ  0x1a
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
+#define VUSB_DEVICE_PING      0x11
+#define VUSB_DEVICE_RESET     0x12
+#define VUSB_DEVICE_ATTACH    0x13
+#define VUSB_DEVICE_DETACH    0x14
+#define VUSB_DEVICE_MEMORY    0x15
+#define VUSB_DEVICE_HWATTACH  0x16
+#define VUSB_DEVICE_DATA      0x17
+#define VUSB_DEVICE_HEADER    0x18 // the header with the length field
+#define VUSB_DEVICE_CLEARSCRN 0x19
+#define VUSB_DEVICE_IRQ       0x20
+
+#define VUSB_DEVICE_ERROR 0x3e // diagnose
+#define VUSB_DEVICE_MAX 0x3f // max cmd nbr
+
 
  /***********************************
  *                                  *
@@ -229,7 +243,7 @@ struct vusb_udc {
   int crdev_major;
 
   /* Per-port info */
-  //struct ast_vhub_port* ports;
+  //struct vusb_port* ports;
   u32			max_ports;
 
   struct usb_gadget gadget;
@@ -261,8 +275,12 @@ struct vusb_udc {
 
 };
 
+int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env);
 void pr_hex_mark(const char* mem, int count, int mark);
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
+void vusb_eps_init(struct vusb_udc* udc);
+void vusb_req_done(struct vusb_req* req, int status);
+void vusb_nuke(struct vusb_ep* ep, int status);
 
 #endif /* __VUSB_UDC_H */
