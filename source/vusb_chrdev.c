@@ -54,16 +54,10 @@ typedef struct vusb_send {
   uint8_t length;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = {
-    { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*hub*/ 0, 0},
-    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*hub*/ 0, 0},
-    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWDETACH, "VUSB_DEVICE_HWDETACH",/*port*/1, 0},
-
-    { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/1, 0},
-    { "p",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_PING,     "VUSB_DEVICE_PING",    /*port*/0, 0},
-    { "m",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_MEMORY,   "VUSB_DEVICE_MEMORY",  /*port*/1, 4},
-    { "c",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_CLEARSCRN, "VUSB_DEVICE_CLEARSCR",/*port*/0, 0},
-    { "i",   /*cmd*/ VUSB_SPI_CMD_READ | VUSB_DEVICE_DATA,      "VUSB_DEVICE_DATA",    /*port*/0, 0},
-    { "e",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ERROR,    "VUSB_DEVICE_ERROR",   /*port*/0, 0},
+    { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*port*/ 0, 1},
+    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*port*/ 0, 1},
+    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWDETACH, "VUSB_DEVICE_HWDETACH",/*port*/ 1, 1},
+    { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/ 2, 1},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
@@ -106,27 +100,9 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
         memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
-        if (vusb_send_tab[j].cmd & VUSB_SPI_CMD_WRITE) {
-          UDCVDBG(udc, "mcu write: %s, digit:%d", vusb_send_tab[j].cmdst, isdigit(data[i + 1]));
-        }
-        else {
-          UDCVDBG(udc, "mcu write/read: %s", vusb_send_tab[j].cmdst);
-        }
-        u16 length = vusb_send_tab[j].length;
-        u16 inlength;
-        if (isdigit(data[i + 1]) && 0 == kstrtou16(&data[i + 1], 10, &inlength)) {
-          length = inlength;
-          if (length > VUSB_SPI_BUFFER_LENGTH >>1) {
-            length -= VUSB_SPI_BUFFER_LENGTH >> 1;
-            get_random_bytes(udc->transfer, length);
-          } else {
-            size_t i;
-            for (i = 0; i < length; i++)
-              udc->transfer[i] = i + 0x20;
-          }
-        }
-        vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, length);
-        msleep(400);
+        *udc->transfer = vusb_send_tab[j].port;
+        vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
+        msleep(200);
         break;
       }
     }

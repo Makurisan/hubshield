@@ -465,11 +465,8 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      //chip->irq_ack(data);
 #define REG_USBIRQ	3
 #define REG_IRQ_ELEMENTS 12
-
-      UDCVDBG(udc, "vusb_mcu_irq: IRQ arrived\n");
       //trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
       //  desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
       vusb_req_map_t* reg = (vusb_req_map_t*)udc->transfer;
