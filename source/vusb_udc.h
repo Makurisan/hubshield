@@ -22,9 +22,15 @@
 #define VUSB_REG_ATTACH     0x02
 #define VUSB_REG_HWDETACH   0x03
 #define VUSB_REG_HWATTACH   0x04
-#define VUSB_REG_IRQ_GET    0x05
-#define VUSB_REG_IRQ_SET    0x06
-#define VUSB_REG_IRQ_CLEAR  0x07
+#define VUSB_REG_MEMORY		  0x05
+ // irq register
+#define VUSB_REG_IRQ_GET    0x10
+#define VUSB_REG_IRQ_SET    0x11
+#define VUSB_REG_IRQ_CLEAR  0x12
+// port register							 
+
+// pipe register
+
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
