@@ -47,7 +47,7 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
       if (vusb_read_buffer(udc, VUSB_SPI_CMD_READ, udc->spitransfer, cmd->length)) {
         //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PR_READ);
         // IRQ reg data
-        if (cmd->reg.bit.reg == VUSB_REG_GET_IRQDATA) {
+        if (cmd->reg.bit.reg == VUSB_REG_IRQ_GET) {
           memmove(udc->irq_data, cmd->data, cmd->length);
           //UDCVDBG(udc, "vusb_spi_dtrdy: VUSB_REG_GET_IRQDATA r1:%d, r2:%d\n",
           //               udc->irq_data[0], udc->irq_data[1]);
@@ -146,7 +146,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
-  //pr_hex_mark(udc->spitransfer, t.len, PR_WRITE);
+  //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE);
   spi_message_add_tail(&t, &msg);
 
   int status = spi_sync(udc->spi, &msg);

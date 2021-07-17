@@ -63,7 +63,7 @@ void pr_hex_mark(const char* mem, int count, int mark)
     if (((i + 1) % 24 == 0) && (i != 0) || (i + 1 == count)) {
       k++;
       switch (mark) {
-      case PR_READ:
+      case PRINTF_READ:
         if (k == 1) {
           if (length)
             printk(KERN_INFO " r [%s\n", hexline); // print line to console
@@ -73,7 +73,7 @@ void pr_hex_mark(const char* mem, int count, int mark)
         else
           printk(KERN_INFO "   %s\n", hexline); // print line to console
         break;
-      case PR_WRITE:
+      case PRINTF_WRITE:
         if (k == 1)
           printk(KERN_INFO "w [%s\n", hexline); // print line to console
         else {

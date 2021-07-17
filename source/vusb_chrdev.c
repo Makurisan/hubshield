@@ -54,10 +54,10 @@ typedef struct vusb_send {
   uint8_t length;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = {
-    { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_RESET,    "VUSB_DEVICE_RESET",   /*port*/ 0, 1},
-    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWATTACH, "VUSB_DEVICE_HWATTACH",/*port*/ 0, 1},
-    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_HWDETACH, "VUSB_DEVICE_HWDETACH",/*port*/ 1, 1},
-    { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_DEVICE_ATTACH,   "VUSB_DEVICE_ATTACH",  /*port*/ 2, 1},
+    { "r",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_RESET,    "REG_RESET",   /*port*/ 0, 1},
+    { "a",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_HWATTACH, "REG_HWATTACH",/*port*/ 0, 1},
+    { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_HWDETACH, "REG_HWDETACH",/*port*/ 1, 1},
+    { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_ATTACH,   "REG_ATTACH",  /*port*/ 2, 1},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
@@ -102,7 +102,7 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
         memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
         *udc->transfer = vusb_send_tab[j].port;
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
-        msleep(200);
+        msleep_interruptible(100);
         break;
       }
     }

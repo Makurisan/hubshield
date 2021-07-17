@@ -113,11 +113,11 @@ static void __vusb_stop(struct vusb_udc *udc)
 	//spi_wr8(udc, VUSB_REG_CPUCTL, 0);
 
 	//val = spi_rd8(udc, VUSB_REG_USBCTL);
-	val |= PWRDOWN;
-	if (udc->is_selfpowered)
-		val &= ~HOSCSTEN;
-	else
-		val |= HOSCSTEN;
+	//val |= PWRDOWN;
+	//if (udc->is_selfpowered)
+	//	val &= ~HOSCSTEN;
+	//else
+	//	val |= HOSCSTEN;
 	//spi_wr8(udc, VUSB_REG_USBCTL, val);
 }
 
@@ -139,25 +139,25 @@ static void __vusb_start(struct vusb_udc *udc)
 	//spi_wr8(udc, VUSB_REG_USBCTL, 0);
 
 	/* Poll for OSC to stabilize */
-	while (1) {
-		//val = spi_rd8(udc, VUSB_REG_USBIRQ);
-		if (val & OSCOKIRQ)
-			break;
-		cond_resched();
-	}
+	//while (1) {
+	//	//val = spi_rd8(udc, VUSB_REG_USBIRQ);
+	//	if (val & OSCOKIRQ)
+	//		break;
+	//	cond_resched();
+	//}
 
 	/* Enable PULL-UP only when Vbus detected */
 	//val = spi_rd8(udc, VUSB_REG_USBCTL);
-	val |= VBGATE | CONNECT;
+	//val |= VBGATE | CONNECT;
 	//spi_wr8(udc, VUSB_REG_USBCTL, val);
 
-	val = URESDNIRQ | URESIRQ;
-	if (udc->is_selfpowered)
-		val |= NOVBUSIRQ;
+	////val = URESDNIRQ | URESIRQ;
+	////if (udc->is_selfpowered)
+	////	val |= NOVBUSIRQ;
 	//spi_wr8(udc, VUSB_REG_USBIEN, val);
 
 	/* Enable only EP0 interrupts */
-	val = IN0BAVIRQ | OUT0DAVIRQ | SUDAVIRQ;
+	//val = IN0BAVIRQ | OUT0DAVIRQ | SUDAVIRQ;
 	//spi_wr8(udc, VUSB_REG_EPIEN, val);
 
 	/* Enable IRQ to CPU */
@@ -422,33 +422,32 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 
   usbirq = udc->irq_data[0];
   usbien = udc->irq_data[1];
-
 	usbirq &= usbien;
-
-#define URESIRQ		BIT(1) // reset end
 
 	if (usbirq & URESIRQ) {
     UDCVDBG(udc, "Reset detected\n");
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_CLR_IRQDATA, udc->irq_data, 1);
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_DEVICE_HWATTACH, udc->spitransfer, 0);
+    udc->spitransfer[0] = REG_USBIRQ;
+    udc->spitransfer[1] = URESIRQ;
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_HWATTACH, udc->spitransfer, 0);
     udc->irq_data[0] &= ~URESIRQ;
 		return true;
 	}
 
-	if (usbirq & NOVBUSIRQ) {
-		//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
-		dev_dbg(udc->dev, "Cable pulled out\n");
-		return true;
-	}
+	//if (usbirq & NOVBUSIRQ) {
+	//	//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
+	//	dev_dbg(udc->dev, "Cable pulled out\n");
+	//	return true;
+	//}
 
-	if (usbirq & URESDNIRQ) {
-		//spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
-		dev_dbg(udc->dev, "USB Reset\n");
-		//spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
-		//spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
-		//	| OUT0DAVIRQ);
-		return true;
-	}
+	//if (usbirq & URESDNIRQ) {
+	//	//spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
+	//	dev_dbg(udc->dev, "USB Reset\n");
+	//	//spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
+	//	//spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
+	//	//	| OUT0DAVIRQ);
+	//	return true;
+	//}
 
 	return ret;
 }
@@ -472,7 +471,7 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
       vusb_req_map_t* reg = (vusb_req_map_t*)udc->transfer;
       reg->offset = REG_USBIRQ;
       reg->length = REG_IRQ_ELEMENTS;
-      vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_GET_IRQDATA,
+      vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_IRQ_GET,
         udc->transfer, sizeof(vusb_req_map_t));
       if ((udc->todo & ENABLE_IRQ) == 0) {
         disable_irq_nosync(udc->mcu_irq);
