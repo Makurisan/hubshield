@@ -46,7 +46,7 @@
 		__overlay__ {
 			vhub_pins: vhub_pins {
 				brcm,pins = <5 6 24>;	// irq, dtrdy, reset   		
-				brcm,function = <0 0 1>; // input, input, output
+				brcm,function = <0 0 0>; // input, input, output(1)
 				brcm,pull = <2 2 0>;     // 0 = none, 1 = pull down, 2 = pull up
 			};
 		};

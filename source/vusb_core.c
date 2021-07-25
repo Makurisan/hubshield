@@ -429,7 +429,11 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_HWATTACH, udc->spitransfer, 0);
+
+    udc->spitransfer[0] = REG_CPUCTL;
+    udc->spitransfer[1] = SOFTCONT;
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE| VUSB_REG_SET, udc->spitransfer, 2);
+
     udc->irq_data[0] &= ~URESIRQ;
 		return true;
 	}

@@ -23,6 +23,10 @@
 #define VUSB_REG_HWDETACH   0x03
 #define VUSB_REG_HWATTACH   0x04
 #define VUSB_REG_MEMORY		  0x05
+
+// register function
+#define VUSB_REG_SET        0x06
+
  // irq register
 #define VUSB_REG_IRQ_GET    0x10
 #define VUSB_REG_IRQ_SET    0x11
@@ -61,6 +65,12 @@
  ***********************************/
 #define REG_IRQ_ELEMENTS 12
 
+#define REG_CPUCTL		1
+#define IE				BIT(0)	// enable irq pin handling
+#define SOFTCONT	BIT(1)	// soft connect
+
+#define REG_HUBSTAT	2
+
 #define REG_USBIRQ	3
   #define SOFIRQ		BIT(0) // SOF from host
   #define URESIRQ		BIT(1) // reset end
@@ -72,7 +82,6 @@
   #define PRTIRQ(_p) BIT(_p)
   #define PRTIRQ_GET(_p, _data)	FIELD_GET(GENMASK(_p+1, _p), _data)	
   #define PRTIRQ_MASK_SET(_p)	FIELD_PREP(GENMASK(_p, _p), 1)	
-
 
 
 #define VUSB_MAX_EPS		4
