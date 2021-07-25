@@ -424,8 +424,18 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   usbien = udc->irq_data[1];
 	usbirq &= usbien;
 
+  if (usbirq & SRESIRQ) {
+    UDCVDBG(udc, "Reset start\n");
+    udc->spitransfer[0] = REG_USBIRQ;
+    udc->spitransfer[1] = SRESIRQ;
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+
+    udc->irq_data[0] &= ~SRESIRQ;
+    return true;
+  }
+
 	if (usbirq & URESIRQ) {
-    UDCVDBG(udc, "Reset detected\n");
+    UDCVDBG(udc, "Reset end\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
