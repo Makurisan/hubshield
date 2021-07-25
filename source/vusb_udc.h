@@ -45,8 +45,8 @@
  *                                  *
  ***********************************/
 
-#define GPIO_DATRDY_IRQ_PIN   5
-#define GPIO_LISTEN_IRQ_PIN   6
+#define GPIO_LISTEN_IRQ_PIN   5
+#define GPIO_DATRDY_IRQ_PIN   6
 
  /***********************************
  *                                  *
