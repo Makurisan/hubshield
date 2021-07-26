@@ -76,11 +76,11 @@
 
 #define REG_USBIRQ	3
   #define SOFIRQ		BIT(0) // SOF from host
-  #define HRESIRQ		BIT(1) // hardware reset
-  #define SRESIRQ		BIT(2) // usb reset start
-  #define URESIRQ		BIT(3) // usb reset end
-  #define SUSPIRQ		BIT(4) // setup pakets
-  #define UINTIRQ		BIT(5) // irq interrupt	
+  #define HRESIRQ		BIT(1) // System reset
+  #define SRESIRQ		BIT(2) // Usb reset start
+  #define URESIRQ		BIT(3) // Usb reset end
+  #define SUSPIRQ		BIT(4) // Setup pakets
+  #define UINTIRQ		BIT(5) // Irq interrupt	
   #define SPIENIRQ	BIT(6) // SPI enable
 #define REG_USBIEN	4
 #define REG_PRTIRQ	5
@@ -93,6 +93,14 @@
 #define REG_PIPIEN	8
 #define REG_SPIMOD	9	// Edge mode: rising/falling; low, high
 #define REG_HPORTS 	10 // count of ports
+
+#define REG_MAP_PORT 2	
+  #define PORT_REG_TYPE			 0   // Value
+  #define PORT_REG_ADDRESS	 1   // Value
+  #define PORT_REG_STATUS 	 2   // uint16
+  #define RCVQUEUE	     4   // Value
+  #define SNDQUEUE	     5   // Value
+  #define PORT_STAGE     6   // Value
 
 
 #define VUSB_MAX_EPS		4
