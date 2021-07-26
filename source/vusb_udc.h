@@ -92,15 +92,15 @@
 #define REG_PIPIRQ	7
 #define REG_PIPIEN	8
 #define REG_SPIMOD	9	// Edge mode: rising/falling; low, high
-#define REG_HPORTS 	10 // count of ports
+#define REG_HPORTS 	10 // count of hub ports
 
 #define REG_MAP_PORT 2	
   #define PORT_REG_TYPE			 0   // Value
   #define PORT_REG_ADDRESS	 1   // Value
   #define PORT_REG_STATUS 	 2   // uint16
-  #define RCVQUEUE	     4   // Value
-  #define SNDQUEUE	     5   // Value
-  #define PORT_STAGE     6   // Value
+  #define PORT_REG_RCVQUEUE	 4   // Value
+  #define PORT_REG_SNDQUEUE	 5   // Value
+  #define PORT_REG_STAGE     6   // Value
 
 
 #define VUSB_MAX_EPS		4
