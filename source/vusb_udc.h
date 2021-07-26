@@ -23,9 +23,12 @@
 #define VUSB_REG_HWDETACH   0x03
 #define VUSB_REG_HWATTACH   0x04
 #define VUSB_REG_MEMORY		  0x05
-#define VUSB_REG_PRINTF		  0x06
-// register function
-#define VUSB_REG_SET        0x07
+ // register function
+#define VUSB_REG_SET        0x06
+
+#define VUSB_REG_PRINTF		  0x30
+#define VUSB_REG_PRINTF1	  0x31
+#define VUSB_REG_PRINTF2	  0x32
 
  // irq register
 #define VUSB_REG_IRQ_GET    0x10
@@ -84,6 +87,12 @@
   #define PRTIRQ(_p) BIT(_p)
   #define PRTIRQ_GET(_p, _data)	FIELD_GET(GENMASK(_p+1, _p), _data)	
   #define PRTIRQ_MASK_SET(_p)	FIELD_PREP(GENMASK(_p, _p), 1)	
+
+#define REG_PRTIEN	6
+#define REG_PIPIRQ	7
+#define REG_PIPIEN	8
+#define REG_SPIMOD	9	// Edge mode: rising/falling; low, high
+#define REG_HPORTS 	10 // count of ports
 
 
 #define VUSB_MAX_EPS		4
