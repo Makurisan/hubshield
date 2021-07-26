@@ -24,9 +24,8 @@
 #define VUSB_REG_HWATTACH   0x04
 #define VUSB_REG_MEMORY		  0x05
 #define VUSB_REG_PRINTF		  0x06
-
 // register function
-#define VUSB_REG_SET        0x06
+#define VUSB_REG_SET        0x07
 
  // irq register
 #define VUSB_REG_IRQ_GET    0x10
@@ -74,11 +73,12 @@
 
 #define REG_USBIRQ	3
   #define SOFIRQ		BIT(0) // SOF from host
-  #define URESIRQ		BIT(1) // reset end
-  #define SUSPIRQ		BIT(2) // setup pakets
-  #define UINTIRQ		BIT(3) // irq interrupt	
-  #define SPIENIRQ	BIT(4) // SPI enable
-  #define SRESIRQ		BIT(5) // reset start
+  #define HRESIRQ		BIT(1) // hardware reset
+  #define SRESIRQ		BIT(2) // usb reset start
+  #define URESIRQ		BIT(3) // usb reset end
+  #define SUSPIRQ		BIT(4) // setup pakets
+  #define UINTIRQ		BIT(5) // irq interrupt	
+  #define SPIENIRQ	BIT(6) // SPI enable
 #define REG_USBIEN	4
 #define REG_PRTIRQ	5
   #define PRTIRQ(_p) BIT(_p)

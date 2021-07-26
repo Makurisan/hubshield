@@ -425,26 +425,34 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	usbirq &= usbien;
 
   if (usbirq & SRESIRQ) {
-    UDCVDBG(udc, "Reset start\n");
+    UDCVDBG(udc, "USB-Reset start\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = SRESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-
     udc->irq_data[0] &= ~SRESIRQ;
     return true;
   }
 
-	if (usbirq & URESIRQ) {
-    UDCVDBG(udc, "Reset end\n");
+  if (usbirq & URESIRQ) {
+    UDCVDBG(udc, "USB-Reset end\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = URESIRQ;
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE|VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    udc->irq_data[0] &= ~URESIRQ;
+    return true;
+  }
 
+	if (usbirq & HRESIRQ) {
+    UDCVDBG(udc, "Hardware-Reset\n");
+    msleep_interruptible(5);
+    udc->spitransfer[0] = REG_USBIRQ;
+    udc->spitransfer[1] = HRESIRQ;
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    udc->irq_data[0] &= ~HRESIRQ;
+    // connect the usb to the host   
     udc->spitransfer[0] = REG_CPUCTL;
     udc->spitransfer[1] = SOFTCONT;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE| VUSB_REG_SET, udc->spitransfer, 2);
-
-    udc->irq_data[0] &= ~URESIRQ;
 		return true;
 	}
 
