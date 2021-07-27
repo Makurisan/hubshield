@@ -25,6 +25,8 @@
 #define VUSB_REG_MEMORY		  0x05
  // register function
 #define VUSB_REG_SET        0x06
+#define VUSB_REG_PORT_ATTACH  0x07
+#define VUSB_REG_PORT_DETACH  0x08
 
 #define VUSB_REG_PRINTF		  0x30
 #define VUSB_REG_PRINTF1	  0x31
