@@ -31,6 +31,7 @@
 #define VUSB_REG_PRINTF		  0x30
 #define VUSB_REG_PRINTF1	  0x31
 #define VUSB_REG_PRINTF2	  0x32
+#define VUSB_REG_PRINTF3	  0x33
 
  // irq register
 #define VUSB_REG_IRQ_GET    0x10

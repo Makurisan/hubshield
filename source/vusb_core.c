@@ -443,7 +443,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   }
 
 	if (usbirq & HRESIRQ) {
-    UDCVDBG(udc, "Hardware-Reset\n");
+    UDCVDBG(udc, "System-Reset\n");
     msleep_interruptible(5);
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = HRESIRQ;

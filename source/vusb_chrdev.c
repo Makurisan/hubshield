@@ -59,10 +59,12 @@ const vusb_send_t vusb_send_tab[] = {
     { "d",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_HWDETACH,    "REG_HWDETACH",/*port*/ 1, 1},
     { "+",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",  /*port*/ 2, 1},
     { "-",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",  /*port*/ 2, 1},
-        // debug
+   // debug 
+    { "p",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_MEMORY,   "REG_MEMORY",  /*port*/ 0, 0},
     { "s",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF,   "REG_PRINTF",  /*port*/ 0, 0},
     { "t",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF1,  "REG_PRINTF",  /*port*/ 0, 0},
     { "u",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF2,  "REG_PRINTF",  /*port*/ 0, 0},
+    { "v",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF3,  "REG_PRINTF",  /*port*/ 0, 0},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
