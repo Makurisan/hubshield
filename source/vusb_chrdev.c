@@ -65,6 +65,8 @@ const vusb_send_t vusb_send_tab[] = {
     { "t",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF1,  "REG_PRINTF",  /*port*/ 0, 0},
     { "u",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF2,  "REG_PRINTF",  /*port*/ 0, 0},
     { "v",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF3,  "REG_PRINTF",  /*port*/ 0, 0},
+    { "w",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF4,  "REG_PRINTF",  /*port*/ 0, 0},
+    { "x",   /*cmd*/ VUSB_SPI_CMD_WRITE | VUSB_REG_PRINTF5,  "REG_PRINTF",  /*port*/ 0, 0},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
