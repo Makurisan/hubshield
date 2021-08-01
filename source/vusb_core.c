@@ -422,12 +422,13 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
   u8 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
 
-  if (pipeirq & _PIPIRQ1) {
-    UDCVDBG(udc, "USB-Pipe 1 clear\n");
+  // check the first bit set
+  if (_bf_popcount(pipeirq)) {
+    UDCVDBG(udc, "USB-Pipe %d clear\n", _bf_ffsl(pipeirq));
     udc->spitransfer[0] = REG_PIPIRQ1;
-    udc->spitransfer[1] = _PIPIRQ1;
+    udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_map.PIPIRQ &= ~bswap32((uint32_t)_PIPIRQ1);
+    udc->irq_map.PIPIRQ &= ~bswap32((uint32_t)~BIT(_bf_ffsl(pipeirq)));
   }
 
   if (usbirq & SRESIRQ) {

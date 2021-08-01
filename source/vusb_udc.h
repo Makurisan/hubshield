@@ -67,6 +67,8 @@
 #define PRINTF_ERROR 4
 
 #define bswap32(_value) __builtin_bswap32(_value)
+#define _bf_ffsl(x) (__builtin_ffsl (x) - 1)
+#define _bf_popcount(x) __builtin_popcount (x)
 
  /***********************************
  *                                  *
