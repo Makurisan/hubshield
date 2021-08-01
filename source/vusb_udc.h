@@ -13,7 +13,7 @@
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
 #define VUSB_SPI_HEADER		        (1 <<  2)
-#define VUSB_SPI_BUFFER_LENGTH		(3 << 0x10)
+#define VUSB_SPI_BUFFER_LENGTH		(1024)
 
 #define VUSB_SPI_CMD_READ    0x40
 #define VUSB_SPI_CMD_WRITE   0x80
@@ -181,7 +181,7 @@ struct vusb_udc {
   /* SPI master */
   struct spi_device* spi;
   /* SPI transfer buffer */
-  u8 irq_data[12];
+  u8* irq_data;
   u8* spitransfer;
   u8* transfer;
 

@@ -42,10 +42,10 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
       //  desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
       //clear and read
       spi_cmd_t *cmd = (spi_cmd_t*)udc->spitransfer;
-      cmd->length = VUSB_SPI_BUFFER_LENGTH;
+      cmd->length = 64;
       memset(udc->spitransfer, 0, cmd->length);
       if (vusb_read_buffer(udc, VUSB_SPI_CMD_READ, udc->spitransfer, cmd->length)) {
-        //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PR_READ);
+        //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
         // IRQ reg data
         if (cmd->reg.bit.reg == VUSB_REG_IRQ_GET) {
           memmove(udc->irq_data, cmd->data, cmd->length);
@@ -83,7 +83,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   {
     spi_cmd_t* cmd = (spi_cmd_t*)buffer;
     cmd_reg = cmd->reg.val;
-    UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
+    //UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
     //pr_hex_mark(buffer, VUSB_SPI_HEADER, PR_READ);
     // check data
     if (cmd->length)

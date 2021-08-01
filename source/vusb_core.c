@@ -700,6 +700,14 @@ static int vusb_probe(struct spi_device *spi)
     return rc;
   }
 
+  udc->irq_data = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
+            sizeof(*udc->irq_data), GFP_KERNEL);
+  if (!udc->irq_data)
+  {
+    dev_err(&spi->dev, "Unable to allocate Hub irq_data buffer.\n");
+    return -ENOMEM;
+  }
+
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
     sizeof(*udc->transfer), GFP_KERNEL);
   if (!udc->transfer)
@@ -778,7 +786,7 @@ static int vusb_probe(struct spi_device *spi)
   udc->chardev_class->dev_uevent = vusb_chardev_uevent;
 
   device_create(udc->chardev_class, NULL, MKDEV(udc->crdev_major, 1), NULL, "vusb-%d", 1);
-  trace_printk("Succesfully initialized vusb.\n");
+  ////trace_printk("Succesfully initialized vusb.\n");
 
 	return 0;
 err:
@@ -794,23 +802,25 @@ static int vusb_remove(struct spi_device *spi)
 
   dev_info(&spi->dev, "Removing USB udc hub\n");
 
-	usb_del_gadget_udc(&udc->gadget);
+  disable_irq(udc->mcu_irq);
+  disable_irq(udc->spi_datrdy);
 
 	spin_lock_irqsave(&udc->lock, flags);
-
 	kthread_stop(udc->thread_task);
+	spin_unlock_irqrestore(&udc->lock, flags);
+
+  cdev_del(&udc->cdev);
+
+	usb_del_gadget_udc(&udc->gadget);
 
   // remove the char device
   device_destroy(udc->chardev_class, MKDEV(udc->crdev_major, 1));
   class_destroy(udc->chardev_class);
 
   dev_t dev_id = MKDEV(udc->crdev_major, 0);
-  cdev_del(&udc->cdev);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");
-
-	spin_unlock_irqrestore(&udc->lock, flags);
 
 	return 0;
 }
