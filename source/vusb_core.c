@@ -425,10 +425,10 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   // check the first bit set
   if (_bf_popcount(pipeirq)) {
     UDCVDBG(udc, "USB-Pipe %d clear\n", _bf_ffsl(pipeirq));
-    udc->spitransfer[0] = REG_PIPIRQ1;
-    udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_map.PIPIRQ &= ~bswap32((uint32_t)~BIT(_bf_ffsl(pipeirq)));
+    udc->spitransfer[0] = REG_PIPIRQ4;
+    *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5);
+    udc->irq_map.PIPIRQ &= ~bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
   }
 
   if (usbirq & SRESIRQ) {
