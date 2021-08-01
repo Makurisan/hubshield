@@ -47,11 +47,13 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
       if (vusb_read_buffer(udc, VUSB_SPI_CMD_READ, udc->spitransfer, cmd->length)) {
         //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
         // IRQ reg data
-        if (cmd->reg.bit.reg == VUSB_REG_IRQ_GET) {
-          memmove(udc->irq_data, cmd->data, cmd->length);
-          //UDCVDBG(udc, "vusb_spi_dtrdy: VUSB_REG_GET_IRQDATA r1:%d, r2:%d\n",
-          //               udc->irq_data[0], udc->irq_data[1]);
-          if (udc->irq_data[0] & udc->irq_data[1]) {
+        if (cmd->reg.bit.reg == VUSB_REG_IRQ_GET && cmd->length == sizeof(vusb_req_map_t)) {
+          memmove(&udc->irq_map, udc->spitransfer+VUSB_SPI_HEADER, sizeof(vusb_req_map_t));
+          //UDCVDBG(udc, "vusb_spi_dtrdy: VUSB_REG_GET_IRQDATA r1:%x, r2:%x\n",
+          //  bswap32(udc->irq_map.PIPIRQ), bswap32(udc->irq_map.PIPIEN));
+          //pr_hex_mark(udc->irq_data, cmd->length, PRINTF_READ);
+          if ( (udc->irq_map.USBIRQ & udc->irq_map.USBIEN) ||
+                 (udc->irq_map.PIPIRQ & udc->irq_map.PIPIEN)) {
             if (udc->thread_task &&
               udc->thread_task->state != TASK_RUNNING)
               wake_up_process(udc->thread_task);

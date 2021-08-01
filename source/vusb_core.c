@@ -417,19 +417,25 @@ xfer_done:
 
 static int vusb_handle_irqs(struct vusb_udc *udc)
 {
-	u8 usbirq, usbien;
 	bool ret = false;
 
-  usbirq = udc->irq_data[0];
-  usbien = udc->irq_data[1];
-	usbirq &= usbien;
+  u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
+  u8 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
+
+  if (pipeirq & _PIPIRQ1) {
+    UDCVDBG(udc, "USB-Pipe 1 clear\n");
+    udc->spitransfer[0] = REG_PIPIRQ1;
+    udc->spitransfer[1] = _PIPIRQ1;
+    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    udc->irq_map.PIPIRQ &= ~bswap32((uint32_t)_PIPIRQ1);
+  }
 
   if (usbirq & SRESIRQ) {
     UDCVDBG(udc, "USB-Reset start\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = SRESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_data[0] &= ~SRESIRQ;
+    udc->irq_map.USBIRQ &= ~SRESIRQ;
     return true;
   }
 
@@ -438,7 +444,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_data[0] &= ~URESIRQ;
+    udc->irq_map.USBIRQ &= ~URESIRQ;
     return true;
   }
 
@@ -448,7 +454,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = HRESIRQ;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_data[0] &= ~HRESIRQ;
+    udc->irq_map.USBIRQ &= ~HRESIRQ;
     // connect the usb to the host   
     udc->spitransfer[0] = REG_CPUCTL;
     udc->spitransfer[1] = SOFTCONT;
@@ -474,6 +480,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	return ret;
 }
 
+// read all mcu IRQs    
 static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 {
   struct vusb_udc* udc = dev_id;
@@ -489,12 +496,11 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 #define REG_USBIRQ	3
 #define REG_IRQ_ELEMENTS 12
       //trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
-      //  desc->irq_data.hwirq, desc->irqs_unhandled, desc->irq_count);
-      vusb_req_map_t* reg = (vusb_req_map_t*)udc->transfer;
-      reg->offset = REG_USBIRQ;
-      reg->length = REG_IRQ_ELEMENTS;
+      // read all mcu IRQs    
+      udc->transfer[0] = REG_USBIRQ; // offset
+      udc->transfer[1] = REG_IRQ_ELEMENTS; // length
       vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_IRQ_GET,
-        udc->transfer, sizeof(vusb_req_map_t));
+             udc->transfer, sizeof(u8)*2);
       if ((udc->todo & ENABLE_IRQ) == 0) {
         disable_irq_nosync(udc->mcu_irq);
         udc->todo |= ENABLE_IRQ;

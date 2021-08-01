@@ -66,6 +66,8 @@
 #define PRINTF_READ  2
 #define PRINTF_ERROR 4
 
+#define bswap32(_value) __builtin_bswap32(_value)
+
  /***********************************
  *                                  *
  *                                  *
@@ -94,18 +96,32 @@
   #define PRTIRQ_MASK_SET(_p)	FIELD_PREP(GENMASK(_p, _p), 1)	
 
 #define REG_PRTIEN	6
-#define REG_PIPIRQ	7
-#define REG_PIPIEN	8
-#define REG_SPIMOD	9	// Edge mode: rising/falling; low, high
-#define REG_HPORTS 	10 // count of hub ports
 
-#define REG_MAP_PORT 2	
-  #define PORT_REG_TYPE			 0   // Value
-  #define PORT_REG_ADDRESS	 1   // Value
-  #define PORT_REG_STATUS 	 2   // uint16
-  #define PORT_REG_RCVQUEUE	 4   // Value
-  #define PORT_REG_SNDQUEUE	 5   // Value
-  #define PORT_REG_STAGE     6   // Value
+#define REG_PIPIRQ4	7
+#define REG_PIPIRQ3	8
+#define REG_PIPIRQ2	9
+#define REG_PIPIRQ1	10
+ /* same as PIPIRQ1/PIPIRQ8 */
+#define _PIPIRQ7 BIT(7) // Pipe 7
+#define _PIPIRQ6	BIT(6) // Pipe 6
+#define _PIPIRQ5	BIT(5) // Pipe 5
+#define _PIPIRQ4	BIT(4) // Pipe 4
+#define _PIPIRQ3	BIT(3) // Pipe 3
+#define _PIPIRQ2	BIT(2) // Pipe 2
+#define _PIPIRQ1	BIT(1) // Pipe 1
+#define _PIPIRQ0	BIT(0) // Pipe 0
+#define REG_PIPIEN4	11
+#define REG_PIPIEN3	12
+#define REG_PIPIEN2	13
+#define REG_PIPIEN1 14
+
+//#define REG_PIPIEN_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIEN4])
+//#define REG_PIPIRQ_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIRQ4])
+
+#define REG_SPIMOD	15 // Edge mode: rising/falling; low, high
+#define REG_PORTS 	16 // count of ports
+#define REG_PIPES 	17 // count of pipes
+#define REG_TDS   	18 // count of tds
 
 
 #define VUSB_MAX_EPS		4
@@ -133,10 +149,17 @@
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
 // register data map
+#pragma pack(8)
 typedef struct vusb_req_map {
-  u8 offset;
-  u8 length;
+// usb
+  u8 USBIRQ; u8 USBIEN;
+// port
+  u8 PRTIRQ; u8 PRTIEN;
+// pipe
+  u32 PIPIRQ;
+  u32 PIPIEN;
 }vusb_req_map_t;
+#pragma pack()
 
 struct vusb_req {
   struct usb_request usb_req;
@@ -182,6 +205,7 @@ struct vusb_udc {
   struct spi_device* spi;
   /* SPI transfer buffer */
   u8* irq_data;
+  vusb_req_map_t irq_map;
   u8* spitransfer;
   u8* transfer;
 
