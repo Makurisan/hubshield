@@ -13,7 +13,7 @@
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
 #define VUSB_SPI_HEADER		        (1 <<  2)
-#define VUSB_SPI_BUFFER_LENGTH		(1 << 10)
+#define VUSB_SPI_BUFFER_LENGTH		(3 << 0x10)
 
 #define VUSB_SPI_CMD_READ    0x40
 #define VUSB_SPI_CMD_WRITE   0x80
