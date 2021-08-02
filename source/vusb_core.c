@@ -241,7 +241,7 @@ static void vusb_getstatus(struct vusb_udc *udc)
 	//spi_wr8_ack(udc, VUSB_REG_EP0BC, 2, 1);
 	return;
 stall:
-	dev_err(udc->dev, "Can't respond to getstatus request\n");
+	UDCVDBG(udc, "Can't respond to getstatus request\n");
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
@@ -286,16 +286,12 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 		break;
 	}
 
-	dev_err(udc->dev, "Can't respond to SET/CLEAR FEATURE\n");
+	UDCVDBG(udc, "Can't respond to SET/CLEAR FEATURE\n");
 	////spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-static void vusb_handle_setup(struct vusb_udc *udc)
+void vusb_handle_setup(struct vusb_udc *udc, struct usb_ctrlrequest setup)
 {
-	struct usb_ctrlrequest setup;
-
-	//spi_rd_buf(udc, VUSB_REG_SUDFIFO, (void *)&setup, 8);
-
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
 	udc->setup.wIndex = cpu_to_le16(setup.wIndex);
@@ -317,7 +313,7 @@ static void vusb_handle_setup(struct vusb_udc *udc)
 			break;
 		}
 		//spi_rd8_ack(udc, VUSB_REG_FNADDR, 1);
-		dev_dbg(udc->dev, "Assigned Address=%d\n", udc->setup.wValue);
+		UDCVDBG(udc,  "Assigned Address=%d\n", udc->setup.wValue);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
@@ -329,6 +325,8 @@ static void vusb_handle_setup(struct vusb_udc *udc)
 	default:
 		break;
 	}
+
+return;
 
 	if (udc->driver->setup(&udc->gadget, &setup) < 0) {
 		/* Stall EP0 */
@@ -348,7 +346,7 @@ void vusb_req_done(struct vusb_req *req, int status)
 		status = req->usb_req.status;
 
 	if (status && status != -ESHUTDOWN)
-		dev_err(udc->dev, "%s done %p, status %d\n",
+		UDCVDBG(udc, "%s done %p, status %d\n",
 			ep->ep_usb.name, req, status);
 
 	if (req->usb_req.complete)
@@ -420,15 +418,21 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	bool ret = false;
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
-  u8 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
+  u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
 
   // check the first bit set
   if (_bf_popcount(pipeirq)) {
-    UDCVDBG(udc, "USB-Pipe %d clear\n", _bf_ffsl(pipeirq));
+    UDCVDBG(udc, "USB-Pipe %d clear\n", _bf_ffsl(pipeirq)+1);
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5);
-    udc->irq_map.PIPIRQ &= ~bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
+    //udc->irq_map.PIPIRQ &= bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
+    udc->irq_map.PIPIRQ = 0;
+    // read the setup data
+    udc->transfer[0] = REG_PIPIRQ4;
+    *(u32*)&udc->transfer[1] = BIT(_bf_ffsl(pipeirq));
+    vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_PIPE_SETUP_GET,
+      udc->transfer, sizeof(u8) * 5);
   }
 
   if (usbirq & SRESIRQ) {
@@ -465,13 +469,13 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 
 	//if (usbirq & NOVBUSIRQ) {
 	//	//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
-	//	dev_dbg(udc->dev, "Cable pulled out\n");
+	//	UDCVDBG(udc,  "Cable pulled out\n");
 	//	return true;
 	//}
 
 	//if (usbirq & URESDNIRQ) {
 	//	//spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
-	//	dev_dbg(udc->dev, "USB Reset\n");
+	//	UDCVDBG(udc,  "USB Reset\n");
 	//	//spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
 	//	//spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
 	//	//	| OUT0DAVIRQ);

@@ -59,6 +59,12 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
               wake_up_process(udc->thread_task);
           }
         }
+        if (cmd->reg.bit.reg == VUSB_REG_PIPE_SETUP_GET && cmd->length == sizeof(struct usb_ctrlrequest)) {
+          struct usb_ctrlrequest setup;
+          memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER, sizeof(struct usb_ctrlrequest));
+          //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+          vusb_handle_setup(udc, setup);
+        }
       }
       wake_up_interruptible(&udc->spi_read_queue);
     }

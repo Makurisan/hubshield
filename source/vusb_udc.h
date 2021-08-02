@@ -42,6 +42,7 @@
 // port register							 
 
 // pipe register
+#define VUSB_REG_PIPE_SETUP_GET 0x15
 
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
@@ -267,5 +268,7 @@ void vusb_eps_init(struct vusb_udc* udc);
 void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
+
+void vusb_handle_setup(struct vusb_udc* udc, struct usb_ctrlrequest setup);
 
 #endif /* __VUSB_UDC_H */
