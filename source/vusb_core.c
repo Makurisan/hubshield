@@ -413,9 +413,48 @@ xfer_done:
 	return true;
 }
 
+#define REG_USBIRQ	3
+#define REG_IRQ_ELEMENTS 12
+
+
+// read all mcu IRQs    
+static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
+{
+  struct vusb_udc* udc = dev_id;
+  irqreturn_t iret = IRQ_HANDLED;
+
+  struct irq_desc* desc = irq_to_desc(irq);
+  struct irq_data* data = irq_desc_get_irq_data(desc);
+  if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
+  {
+    unsigned long flags;
+    struct irq_chip* chip = irq_desc_get_chip(desc);
+    if (chip)
+    {
+      spin_lock_irqsave(&udc->lock, flags);
+      if ((udc->todo & ENABLE_IRQ) == 0) {
+        disable_irq_nosync(udc->mcu_irq);
+        udc->todo |= ENABLE_IRQ;
+      }
+      spin_unlock_irqrestore(&udc->lock, flags);
+      if (udc->thread_task && udc->thread_task->state != TASK_RUNNING)
+        wake_up_process(udc->thread_task);
+    }
+  }
+  return iret;
+}
+
 static int vusb_handle_irqs(struct vusb_udc *udc)
 {
 	bool ret = false;
+  int rc;
+
+  // read all mcu IRQs    
+  if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
+    return false;
+  }
+  //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ);
+  memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
   u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
@@ -429,10 +468,10 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     //udc->irq_map.PIPIRQ &= bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
     udc->irq_map.PIPIRQ = 0;
     // read the setup data
-    udc->transfer[0] = REG_PIPIRQ4;
-    *(u32*)&udc->transfer[1] = BIT(_bf_ffsl(pipeirq));
-    vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_PIPE_SETUP_GET,
-      udc->transfer, sizeof(u8) * 5);
+    //udc->transfer[0] = REG_PIPIRQ4;
+    //*(u32*)&udc->transfer[1] = BIT(_bf_ffsl(pipeirq));
+    //vusb_read_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 5);
+    return true;
   }
 
   if (usbirq & SRESIRQ) {
@@ -464,7 +503,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->spitransfer[0] = REG_CPUCTL;
     udc->spitransfer[1] = SOFTCONT;
     vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE| VUSB_REG_SET, udc->spitransfer, 2);
-		return true;
+    return true;
 	}
 
 	//if (usbirq & NOVBUSIRQ) {
@@ -485,37 +524,6 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	return ret;
 }
 
-// read all mcu IRQs    
-static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
-{
-  struct vusb_udc* udc = dev_id;
-  irqreturn_t iret = IRQ_HANDLED;
-
-  struct irq_desc* desc = irq_to_desc(irq);
-  struct irq_data* data = irq_desc_get_irq_data(desc);
-  if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
-  {
-    struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip)
-    {
-#define REG_USBIRQ	3
-#define REG_IRQ_ELEMENTS 12
-      //trace_printk("irq/desc:%d, irqs/unhandled:%d, irq/count:%d\n",
-      // read all mcu IRQs    
-      udc->transfer[0] = REG_USBIRQ; // offset
-      udc->transfer[1] = REG_IRQ_ELEMENTS; // length
-      vusb_write_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_IRQ_GET,
-             udc->transfer, sizeof(u8)*2);
-      if ((udc->todo & ENABLE_IRQ) == 0) {
-        disable_irq_nosync(udc->mcu_irq);
-        udc->todo |= ENABLE_IRQ;
-      }
-    }
-  }
-  return iret;
-}
-
-
 static int vusb_thread(void *dev_id)
 {
 	struct vusb_udc *udc = dev_id;
@@ -525,24 +533,21 @@ static int vusb_thread(void *dev_id)
 
 	while (!kthread_should_stop()) {
 		if (!loop_again) {
-			ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
-
+			ktime_t kt = ns_to_ktime(1000 * 1000 * 500); /* 250ms */
 			set_current_state(TASK_INTERRUPTIBLE);
       spin_lock_irqsave(&udc->lock, flags);
 			if (udc->todo & ENABLE_IRQ) {
-        //UDCVDBG(udc, "vusb_thread: mcu enable_irq\n");
         enable_irq(udc->mcu_irq);
 				udc->todo &= ~ENABLE_IRQ;
 			}
 			spin_unlock_irqrestore(&udc->lock, flags);
-
 			schedule_hrtimeout(&kt, HRTIMER_MODE_REL);
 		}
 		loop_again = 0;
 
 		mutex_lock(&udc->spi_bus_mutex);
 
-		/* If disconnected */
+ 		/* If disconnected */
 		if (!udc->softconnect)
 			goto loop;
 
