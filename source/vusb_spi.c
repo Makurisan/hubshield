@@ -65,7 +65,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
     spi_cmd_t* cmd = (spi_cmd_t*)buffer;
     cmd_reg = cmd->reg.val;
     ////UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
-    pr_hex_mark(buffer, VUSB_SPI_HEADER, PRINTF_READ);
+    //pr_hex_mark(buffer, VUSB_SPI_HEADER, PRINTF_READ);
     // check data
     if (cmd->length)
     {
@@ -87,11 +87,11 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
             return cmd->length;
           }
           else {
-            UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+            //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
           }
         }
         else {
-          UDCVDBG(udc, "mcu read spi_sync error!\n");
+          //UDCVDBG(udc, "mcu read spi_sync error!\n");
         }
       }
       else {
@@ -99,7 +99,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       }
     }
     else {
-      UDCVDBG(udc, "mcu read spi no length returned: %02x\n", cmd->length);
+      //UDCVDBG(udc, "mcu read spi no length returned: %02x\n", cmd->length);
     }
   }
   return 0;
@@ -111,7 +111,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   struct spi_message msg;
   int rc = 0;
 
-  mutex_lock_interruptible(&udc->spi_read_mutex);
+  //mutex_lock_interruptible(&udc->spi_read_mutex);
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -135,8 +135,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE);
   spi_message_add_tail(&t, &msg);
 
-  int status = !spi_sync(udc->spi, &msg);
-  if (cmd->reg.bit.read) {
+  if (!spi_sync(udc->spi, &msg)) {
     rc = wait_event_interruptible_timeout(udc->spi_read_queue,
       !gpio_get_value(GPIO_DATRDY_IRQ_PIN), VUSB_SPI_DATRDY_TIMEOUT*10);
     if (rc) {
@@ -145,7 +144,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
       UDCVDBG(udc, "*Mcu error wait vusb_read_buffer\n");
     }
   }
-  mutex_unlock(&udc->spi_read_mutex);
+  ////mutex_unlock(&udc->spi_read_mutex);
 
   return rc;
 }
@@ -155,8 +154,6 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   struct spi_transfer t;
   struct spi_message msg;
-
-  mutex_lock_interruptible(&udc->spi_read_mutex);
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -168,7 +165,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   memmove(cmd->data, buffer, length);
 
   // prepare the header
-  cmd->reg.val = reg;
+  cmd->reg.val = VUSB_SPI_CMD_WRITE | reg;
   // crc over data
   cmd->crc8 = crc8(udc->crc_table, cmd->data, length, 0);
   cmd->length = length;
@@ -183,12 +180,6 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   spi_message_add_tail(&t, &msg);
 
   int status = spi_sync(udc->spi, &msg);
-  if (cmd->reg.bit.read) {
-    wait_event_interruptible_timeout(udc->spi_read_queue,
-      gpio_get_value(GPIO_DATRDY_IRQ_PIN), VUSB_SPI_DATRDY_TIMEOUT);
-
-  }
-  mutex_unlock(&udc->spi_read_mutex);
 
   return !status;
 }

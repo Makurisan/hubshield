@@ -453,6 +453,9 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false;
   }
+  if(udc->spitransfer[0] != (VUSB_REG_IRQ_GET|VUSB_SPI_CMD_READ))
+    return false;
+
   //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ);
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
@@ -461,16 +464,20 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 
   // check the first bit set
   if (_bf_popcount(pipeirq)) {
-    UDCVDBG(udc, "USB-Pipe %d clear, value:%x\n", _bf_ffsl(pipeirq)+1, pipeirq);
+    UDCVDBG(udc, "USB-Pipe bitpos: %d index: %d\n", pipeirq, pipeirq>>1);
     udc->spitransfer[0] = REG_PIPIRQ4;
-    *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5);
+    *(u32*)&udc->spitransfer[1] = pipeirq;
+    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5); // u32 + u8
     //udc->irq_map.PIPIRQ &= bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
     udc->irq_map.PIPIRQ = 0;
-    // read the setup data
-    //udc->transfer[0] = REG_PIPIRQ4;
-    //*(u32*)&udc->transfer[1] = BIT(_bf_ffsl(pipeirq));
-    //vusb_read_buffer(udc, VUSB_SPI_CMD_READ | VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 5);
+     //read the setup data
+    udc->spitransfer[0] = REG_PIPIRQ4;
+    *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
+    if (vusb_read_buffer(udc, VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 8)) {
+      pr_hex_mark(udc->spitransfer, sizeof(u8) * 8 + VUSB_SPI_HEADER, PRINTF_READ);
+    }
+    else
+      UDCVDBG(udc, "--> error reading setup data\n");
     return true;
   }
 
@@ -478,7 +485,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     UDCVDBG(udc, "USB-Reset start\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = SRESIRQ;
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~SRESIRQ;
     return true;
   }
@@ -487,24 +494,24 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     UDCVDBG(udc, "USB-Reset end\n");
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = URESIRQ;
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~URESIRQ;
     return true;
   }
 
-	if (usbirq & HRESIRQ) {
+  if (usbirq & HRESIRQ) {
     UDCVDBG(udc, "System-Reset\n");
     msleep_interruptible(5);
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = HRESIRQ;
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE | VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~HRESIRQ;
     // connect the usb to the host   
     udc->spitransfer[0] = REG_CPUCTL;
     udc->spitransfer[1] = SOFTCONT;
-    vusb_write_buffer(udc, VUSB_SPI_CMD_WRITE| VUSB_REG_SET, udc->spitransfer, 2);
+    vusb_write_buffer(udc, VUSB_REG_SET, udc->spitransfer, 2);
     return true;
-	}
+  }
 
 	//if (usbirq & NOVBUSIRQ) {
 	//	//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
@@ -533,7 +540,7 @@ static int vusb_thread(void *dev_id)
 
 	while (!kthread_should_stop()) {
 		if (!loop_again) {
-			ktime_t kt = ns_to_ktime(1000 * 1000 * 500); /* 250ms */
+			ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
 			set_current_state(TASK_INTERRUPTIBLE);
       spin_lock_irqsave(&udc->lock, flags);
 			if (udc->todo & ENABLE_IRQ) {
@@ -572,6 +579,7 @@ static int vusb_thread(void *dev_id)
 		//		loop_again = 1;
 		//}
 loop:
+    loop_again = loop_again;
 		mutex_unlock(&udc->spi_bus_mutex);
 	}
 
@@ -702,6 +710,7 @@ static int vusb_probe(struct spi_device *spi)
   /* INTERRUPT spi read queue */
   init_waitqueue_head(&udc->spi_read_queue);
   mutex_init(&udc->spi_read_mutex);
+  mutex_init(&udc->spi_write_mutex);
 
 	udc->ep0req.ep = &udc->ep[0];
 	udc->ep0req.usb_req.buf = udc->ep0buf;

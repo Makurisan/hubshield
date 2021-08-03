@@ -218,6 +218,7 @@ struct vusb_udc {
   int mcu_irq;
 
   struct mutex spi_read_mutex;
+  struct mutex spi_write_mutex;
   struct wait_queue_head spi_read_queue;
 
   u8 crc_table[CRC8_TABLE_SIZE];
