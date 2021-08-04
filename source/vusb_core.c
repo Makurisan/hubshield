@@ -328,11 +328,11 @@ void vusb_handle_setup(struct vusb_udc *udc, struct usb_ctrlrequest setup)
 
 return;
 
-	if (udc->driver->setup(&udc->gadget, &setup) < 0) {
-		/* Stall EP0 */
-		//spi_wr8(udc, VUSB_REG_EPSTALLS,
-		//STLEP0IN | STLEP0OUT | STLSTAT);
-	}
+	//if (udc->driver->setup(&udc->gadget, &setup) < 0) {
+	//	/* Stall EP0 */
+	//	//spi_wr8(udc, VUSB_REG_EPSTALLS,
+	//	//STLEP0IN | STLEP0OUT | STLSTAT);
+	//}
 }
 
 void vusb_req_done(struct vusb_req *req, int status)
@@ -474,7 +474,10 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
     if (vusb_read_buffer(udc, VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 8)) {
-      pr_hex_mark(udc->spitransfer, sizeof(u8) * 8 + VUSB_SPI_HEADER, PRINTF_READ);
+      //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8 + VUSB_SPI_HEADER, PRINTF_READ);
+      struct usb_ctrlrequest setup;
+      memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER, sizeof(struct usb_ctrlrequest));
+      vusb_handle_setup(udc, setup);
     }
     else
       UDCVDBG(udc, "--> error reading setup data\n");
@@ -579,7 +582,6 @@ static int vusb_thread(void *dev_id)
 		//		loop_again = 1;
 		//}
 loop:
-    loop_again = loop_again;
 		mutex_unlock(&udc->spi_bus_mutex);
 	}
 
@@ -775,7 +777,7 @@ static int vusb_probe(struct spi_device *spi)
   udc->mcu_irq = gpio_to_irq(GPIO_LISTEN_IRQ_PIN);
   dev_info(&udc->spi->dev, "GPIO for mcu listen hwirq %d is irq %d.\n", GPIO_LISTEN_IRQ_PIN, udc->mcu_irq);
   rc = devm_request_threaded_irq(&udc->spi->dev, udc->mcu_irq, NULL,
-    vusb_mcu_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbirq", udc);
+    vusb_mcu_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_RISING, "vusbirq", udc);
   if (rc)
   {
     dev_err(&udc->spi->dev, "Failed to request listen hwirq interrupt\n");

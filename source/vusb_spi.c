@@ -26,6 +26,10 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
+#define WAIT_UNTIL_GPIO_ASSERTED	msecs_to_jiffies(700)
+
+static int wakeup_flag = 0;
+
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
 {
   struct vusb_udc* udc = dev_id;
@@ -38,8 +42,10 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      //UDCVDBG(udc, "Mcu wait read vusb_spi_dtrdy\n");
+      //spin_lock_irq(&udc->lock);
+      wakeup_flag = 1;
       wake_up_interruptible(&udc->spi_read_queue);
+      //spin_unlock_irq(&udc->lock);
     }
   }
   return iret;
@@ -87,19 +93,20 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
             return cmd->length;
           }
           else {
+            pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
             //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
           }
         }
         else {
-          //UDCVDBG(udc, "mcu read spi_sync error!\n");
+          UDCVDBG(udc, "mcu read spi_sync error!\n");
         }
       }
       else {
-        //UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
+        UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
       }
     }
     else {
-      //UDCVDBG(udc, "mcu read spi no length returned: %02x\n", cmd->length);
+      UDCVDBG(udc, "mcu read spi no length returned: %02x\n", cmd->length);
     }
   }
   return 0;
@@ -111,7 +118,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   struct spi_message msg;
   int rc = 0;
 
-  //mutex_lock_interruptible(&udc->spi_read_mutex);
+  mutex_lock_interruptible(&udc->spi_read_mutex);
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -136,15 +143,15 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   spi_message_add_tail(&t, &msg);
 
   if (!spi_sync(udc->spi, &msg)) {
-    rc = wait_event_interruptible_timeout(udc->spi_read_queue,
-      !gpio_get_value(GPIO_DATRDY_IRQ_PIN), VUSB_SPI_DATRDY_TIMEOUT*10);
+    wakeup_flag = 0;
+    rc = wait_event_interruptible_timeout(udc->spi_read_queue, wakeup_flag, WAIT_UNTIL_GPIO_ASSERTED);
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {
       UDCVDBG(udc, "*Mcu error wait vusb_read_buffer\n");
     }
   }
-  ////mutex_unlock(&udc->spi_read_mutex);
+  mutex_unlock(&udc->spi_read_mutex);
 
   return rc;
 }
