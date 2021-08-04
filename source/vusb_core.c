@@ -453,14 +453,17 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false;
   }
-  if(udc->spitransfer[0] != (VUSB_REG_IRQ_GET|VUSB_SPI_CMD_READ))
-    return false;
 
   //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ);
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
   u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
+
+// debug test...
+  //if (0 == vusb_read_buffer(udc, VUSB_REG_DEBUG, udc->spitransfer, 256)) {
+  //  return false;
+  //}
 
   // check the first bit set
   if (_bf_popcount(pipeirq)) {

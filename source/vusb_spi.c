@@ -72,8 +72,8 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
     cmd_reg = cmd->reg.val;
     ////UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
     //pr_hex_mark(buffer, VUSB_SPI_HEADER, PRINTF_READ);
-    // check data
-    if (cmd->length)
+    // check data length, call/return cmd must be identical
+    if (cmd->length && reg == cmd_reg)
     {
       memset(&tr, 0, sizeof(tr));
       spi_message_init(&m);
@@ -93,47 +93,75 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
             return cmd->length;
           }
           else {
-            pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+            //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
             //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+            return -1;
           }
         }
         else {
-          UDCVDBG(udc, "mcu read spi_sync error!\n");
+          //UDCVDBG(udc, "mcu read spi_sync error!\n");
+          return -2;
         }
       }
       else {
-        UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
+        //UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
+        return -3;
       }
     }
     else {
-      UDCVDBG(udc, "mcu read spi no length returned: %02x\n", cmd->length);
+      //UDCVDBG(udc, "mcu read command header error: %02x\n", cmd->length);
+      return -4;
     }
   }
-  return 0;
+  return -5;
 }
 
+#define TRY_FAILED
+static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
+{
+  int rc1=0, rc2=0, rc3=0;
+  mutex_lock_interruptible(&udc->spi_read_mutex);
+#ifdef TRY_FAILED
+  if (0 == (rc1 = _vusb_read_buffer(udc, reg, buffer, length))) {
+    if (0 == (rc2 = _vusb_read_buffer(udc, reg, buffer, length))) {
+      UDCVDBG(udc, "mcu second read error: %d, %d, trying the last time...\n", rc1, rc2);
+      if (0 == (rc3 = _vusb_read_buffer(udc, reg, buffer, length))) {
+        UDCVDBG(udc, "mcu read error: %d, %d, %d, tried three times without success!\n", rc1, rc2, rc3);
+        mutex_unlock(&udc->spi_read_mutex);
+        return rc3;
+      }
+    }
+  }
+#else
+  rc = _vusb_read_buffer(udc, reg, buffer, length));
+#endif // DEBUG
+  mutex_unlock(&udc->spi_read_mutex);
+  return rc1;
+}
+
+static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   struct spi_transfer t;
   struct spi_message msg;
-  int rc = 0;
-
-  mutex_lock_interruptible(&udc->spi_read_mutex);
+  int rc = -7;
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
 
   // header reg, length, crc
   spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+
   // overlapping copy and length automatically checked
   memmove(cmd->data, buffer, length);
-  // prepare the header
+  
+// prepare the header
   cmd->reg.val = VUSB_SPI_CMD_READ | reg;
   // crc over data
   cmd->crc8 = crc8(udc->crc_table, cmd->data, length, 0);
-  cmd->length = length;
 
   t.tx_buf = buffer;
+  cmd->length = length;
   t.len = cmd->length + VUSB_SPI_HEADER;
   t.delay_usecs = 0;
   t.cs_change_delay.unit = 0;
@@ -148,11 +176,10 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {
-      UDCVDBG(udc, "*Mcu error wait vusb_read_buffer\n");
+      //UDCVDBG(udc, "Mcu wait event error for spi read\n");
+      return -6;
     }
   }
-  mutex_unlock(&udc->spi_read_mutex);
-
   return rc;
 }
 
@@ -187,6 +214,9 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   spi_message_add_tail(&t, &msg);
 
   int status = spi_sync(udc->spi, &msg);
+  if (status) {
+    UDCVDBG(udc, "--> Mcu spi write error: %d\n", status);
+  }
 
   return !status;
 }

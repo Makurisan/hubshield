@@ -43,7 +43,7 @@
 
 // pipe register
 #define VUSB_REG_PIPE_SETUP_GET 0x15
-
+#define VUSB_REG_DEBUG          0x16
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
