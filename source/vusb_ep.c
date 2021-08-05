@@ -45,7 +45,7 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  wake_up_process(udc->thread_task);
+  wake_up_process(udc->thread_service);
 
   dev_dbg(udc->dev, "%sStall %s\n", stall ? "" : "Un", ep->name);
   return 0;
@@ -76,7 +76,7 @@ static int vusb_ep_enable(struct usb_ep* _ep,
 
   __vusb_ep_enable(ep, desc);
 
-  wake_up_process(udc->thread_task);
+  wake_up_process(udc->thread_service);
 
   return 0;
 }
@@ -125,7 +125,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
 
   __vusb_ep_disable(ep);
 
-  wake_up_process(udc->thread_task);
+  wake_up_process(udc->thread_service);
 
   return 0;
 }
@@ -165,7 +165,7 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req,
   list_add_tail(&req->queue, &ep->queue);
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  wake_up_process(udc->thread_task);
+  wake_up_process(udc->thread_service);
   return 0;
 }
 

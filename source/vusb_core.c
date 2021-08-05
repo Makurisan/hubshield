@@ -185,26 +185,6 @@ static int vusb_start(struct vusb_udc *udc)
 	return true;
 }
 
-static irqreturn_t vusb_irq_handler(int irq, void *dev_id)
-{
-	struct vusb_udc *udc = dev_id;
-	struct spi_device *spi = udc->spi;
-	unsigned long flags;
-
-	spin_lock_irqsave(&udc->lock, flags);
-	if ((udc->todo & ENABLE_IRQ) == 0) {
-		disable_irq_nosync(spi->irq);
-		udc->todo |= ENABLE_IRQ;
-	}
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-	if (udc->thread_task &&
-	    udc->thread_task->state != TASK_RUNNING)
-		wake_up_process(udc->thread_task);
-
-	return IRQ_HANDLED;
-}
-
 static void vusb_getstatus(struct vusb_udc *udc)
 {
 	struct vusb_ep *ep;
@@ -437,8 +417,12 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
         udc->todo |= ENABLE_IRQ;
       }
       spin_unlock_irqrestore(&udc->lock, flags);
-      if (udc->thread_task && udc->thread_task->state != TASK_RUNNING)
-        wake_up_process(udc->thread_task);
+
+      spin_lock_irqsave(&udc->wq_lock, flags);
+      set_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
+      wake_up_interruptible(&udc->service_thread_wq);
+      spin_unlock_irqrestore(&udc->wq_lock, flags);
+
     }
   }
   return iret;
@@ -461,13 +445,13 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
 
 // debug test...
-  //if (0 == vusb_read_buffer(udc, VUSB_REG_DEBUG, udc->spitransfer, 256)) {
+  //if (0 == vusb_read_buffer(udc, VUSB_REG_DEBUG, udc->spitransfer, 4)) {
   //  return false;
   //}
 
   // check the first bit set
   if (_bf_popcount(pipeirq)) {
-    UDCVDBG(udc, "USB-Pipe bitpos: %d index: %d\n", pipeirq, pipeirq>>1);
+    UDCVDBG(udc, "USB-Pipe bitpos: %x index: %x\n", pipeirq, pipeirq>>1);
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = pipeirq;
     vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5); // u32 + u8
@@ -507,7 +491,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 
   if (usbirq & HRESIRQ) {
     UDCVDBG(udc, "System-Reset\n");
-    msleep_interruptible(5);
+    //msleep_interruptible(5);
     udc->spitransfer[0] = REG_USBIRQ;
     udc->spitransfer[1] = HRESIRQ;
     vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
@@ -534,7 +518,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	//	return true;
 	//}
 
-	return ret;
+	return false;
 }
 
 static int vusb_thread(void *dev_id)
@@ -543,19 +527,39 @@ static int vusb_thread(void *dev_id)
 	struct spi_device *spi = udc->spi;
 	int i, loop_again = 1;
 	unsigned long flags;
+  int ret;
 
 	while (!kthread_should_stop()) {
+
 		if (!loop_again) {
-			ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
-			set_current_state(TASK_INTERRUPTIBLE);
+
+      set_current_state(TASK_INTERRUPTIBLE);
+      ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
+
       spin_lock_irqsave(&udc->lock, flags);
 			if (udc->todo & ENABLE_IRQ) {
         enable_irq(udc->mcu_irq);
 				udc->todo &= ~ENABLE_IRQ;
 			}
 			spin_unlock_irqrestore(&udc->lock, flags);
-			schedule_hrtimeout(&kt, HRTIMER_MODE_REL);
+      
+      spin_lock_irqsave(&udc->wq_lock, flags);
+      wait_event_interruptible_timeout(udc->service_thread_wq,
+        kthread_should_stop() || udc->service_request, msecs_to_jiffies(500));
+      spin_unlock_irqrestore(&udc->wq_lock, flags);
+
+      if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
+        dev_info(udc->dev, "usb hub service is waken up by mcu irq the hub\n");
+      }
+      //schedule_hrtimeout(&kt, HRTIMER_MODE_REL);
+
+      if (kthread_should_stop())
+        break;
+
 		}
+
+    set_current_state(TASK_RUNNING);
+
 		loop_again = 0;
 
 		mutex_lock(&udc->spi_bus_mutex);
@@ -598,20 +602,6 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 	struct vusb_udc *udc = to_udc(gadget);
 	unsigned long flags;
 	int ret = -EINVAL;
-
-	spin_lock_irqsave(&udc->lock, flags);
-
-	/* Only if wakeup allowed by host */
-	if (udc->remote_wkp) {
-		udc->todo |= REMOTE_WAKEUP;
-		ret = 0;
-	}
-
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-	if (udc->thread_task &&
-	    udc->thread_task->state != TASK_RUNNING)
-		wake_up_process(udc->thread_task);
 	return ret;
 }
 
@@ -633,9 +623,9 @@ static int vusb_udc_start(struct usb_gadget *gadget,
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	if (udc->thread_task &&
-	    udc->thread_task->state != TASK_RUNNING)
-		wake_up_process(udc->thread_task);
+	if (udc->thread_service &&
+	    udc->thread_service->state != TASK_RUNNING)
+		wake_up_process(udc->thread_service);
 
 	return 0;
 }
@@ -653,9 +643,9 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	if (udc->thread_task &&
-	    udc->thread_task->state != TASK_RUNNING)
-		wake_up_process(udc->thread_task);
+	if (udc->thread_service &&
+	    udc->thread_service->state != TASK_RUNNING)
+		wake_up_process(udc->thread_service);
 
 	return 0;
 }
@@ -709,8 +699,9 @@ static int vusb_probe(struct spi_device *spi)
 	udc->gadget.name = driver_name;
   udc->gadget.dev.of_node = udc->spi->dev.of_node;
 
-	spin_lock_init(&udc->lock);
-	mutex_init(&udc->spi_bus_mutex);
+  spin_lock_init(&udc->lock);
+  spin_lock_init(&udc->wq_lock);
+  mutex_init(&udc->spi_bus_mutex);
 
   /* INTERRUPT spi read queue */
   init_waitqueue_head(&udc->spi_read_queue);
@@ -730,13 +721,6 @@ static int vusb_probe(struct spi_device *spi)
     return rc;
   }
 
-  udc->irq_data = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-            sizeof(*udc->irq_data), GFP_KERNEL);
-  if (!udc->irq_data)
-  {
-    dev_err(&spi->dev, "Unable to allocate Hub irq_data buffer.\n");
-    return -ENOMEM;
-  }
 
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
     sizeof(*udc->transfer), GFP_KERNEL);
@@ -788,10 +772,8 @@ static int vusb_probe(struct spi_device *spi)
     goto err;
   }
 
-	udc->thread_task = kthread_create(vusb_thread, udc,
-					  "vusb-thread");
-	if (IS_ERR(udc->thread_task))
-		return PTR_ERR(udc->thread_task);
+  // our thread wait queue
+  init_waitqueue_head(&udc->service_thread_wq);
 
 	udc->is_selfpowered = 1;
 	udc->todo |= UDC_START;
@@ -816,7 +798,22 @@ static int vusb_probe(struct spi_device *spi)
   udc->chardev_class->dev_uevent = vusb_chardev_uevent;
 
   device_create(udc->chardev_class, NULL, MKDEV(udc->crdev_major, 1), NULL, "vusb-%d", 1);
-  ////trace_printk("Succesfully initialized vusb.\n");
+
+  // clear the bit that the thread is waiting for something
+  clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
+
+  ////udc->thread_service = kthread_run(vusb_thread, udc, "vusb-thread");
+  ////if (IS_ERR(udc->thread_service))
+  ////  return PTR_ERR(udc->thread_service);
+
+  udc->thread_service = kthread_create(vusb_thread, udc,
+    "vusb-thread");
+  if (IS_ERR(udc->thread_service))
+    return PTR_ERR(udc->thread_service);
+
+  wake_up_process(udc->thread_service);
+
+  UDCVDBG(udc, "Succesfully initialized vusb.\n");
 
 	return 0;
 err:
@@ -836,7 +833,7 @@ static int vusb_remove(struct spi_device *spi)
   disable_irq(udc->spi_datrdy);
 
 	spin_lock_irqsave(&udc->lock, flags);
-	kthread_stop(udc->thread_task);
+	kthread_stop(udc->thread_service);
 	spin_unlock_irqrestore(&udc->lock, flags);
 
   cdev_del(&udc->cdev);

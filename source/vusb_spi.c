@@ -26,9 +26,10 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
-#define WAIT_UNTIL_GPIO_ASSERTED	msecs_to_jiffies(700)
+#define WAIT_UNTIL_GPIO_ASSERTED	msecs_to_jiffies(100)
 
 static int wakeup_flag = 0;
+static ktime_t wait_endtime;
 
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
 {
@@ -42,6 +43,7 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
+      wait_endtime = ktime_get();
       //spin_lock_irq(&udc->lock);
       wakeup_flag = 1;
       wake_up_interruptible(&udc->spi_read_queue);
@@ -134,7 +136,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
     }
   }
 #else
-  rc = _vusb_read_buffer(udc, reg, buffer, length));
+  rc1 = _vusb_read_buffer(udc, reg, buffer, length));
 #endif // DEBUG
   mutex_unlock(&udc->spi_read_mutex);
   return rc1;
@@ -171,8 +173,13 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
   spi_message_add_tail(&t, &msg);
 
   if (!spi_sync(udc->spi, &msg)) {
+    ktime_t wait_starttime = ktime_get();
+    u16 wait_time;
     wakeup_flag = 0;
     rc = wait_event_interruptible_timeout(udc->spi_read_queue, wakeup_flag, WAIT_UNTIL_GPIO_ASSERTED);
+    wait_time = ktime_to_us(wait_endtime - wait_starttime);
+    if(wait_time > 4000)
+    UDCVDBG(udc, "Mcu wait time(us): %d\n", wait_time);
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {

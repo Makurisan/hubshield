@@ -151,6 +151,8 @@
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
+#define VUSB_MCU_IRQ_GPIO 0
+
 // register data map
 #pragma pack(8)
 typedef struct vusb_req_map {
@@ -207,10 +209,11 @@ struct vusb_udc {
   /* SPI master */
   struct spi_device* spi;
   /* SPI transfer buffer */
-  u8* irq_data;
-  vusb_req_map_t irq_map;
   u8* spitransfer;
   u8* transfer;
+
+  /* MCU irq data */
+  vusb_req_map_t irq_map;
 
   /* GPIO SPI IRQs */
   int irq_reset;
@@ -220,6 +223,9 @@ struct vusb_udc {
   struct mutex spi_read_mutex;
   struct mutex spi_write_mutex;
   struct wait_queue_head spi_read_queue;
+
+  struct wait_queue_head service_thread_wq;
+  u32 service_request;
 
   u8 crc_table[CRC8_TABLE_SIZE];
 
@@ -238,7 +244,7 @@ struct vusb_udc {
 
   struct usb_gadget_driver* driver;
 
-  struct task_struct* thread_task;
+  struct task_struct* thread_service;
 
   int remote_wkp, is_selfpowered;
   bool softconnect;
@@ -252,6 +258,7 @@ struct vusb_udc {
   struct device* dev;
 
   spinlock_t lock;
+  spinlock_t wq_lock;
 
   bool suspended;
 
