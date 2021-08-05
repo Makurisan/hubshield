@@ -535,10 +535,6 @@ static int vusb_thread(void *dev_id)
 	while (!kthread_should_stop()) {
 
 		if (!loop_again) {
-
-      set_current_state(TASK_INTERRUPTIBLE);
-      ktime_t kt = ns_to_ktime(1000 * 1000 * 250); /* 250ms */
-
       spin_lock_irqsave(&udc->lock, flags);
 			if (udc->todo & ENABLE_IRQ) {
         enable_irq(udc->mcu_irq);
@@ -546,23 +542,19 @@ static int vusb_thread(void *dev_id)
 			}
 			spin_unlock_irqrestore(&udc->lock, flags);
       
+      // wait interruptible
       spin_lock_irqsave(&udc->wq_lock, flags);
       wait_event_interruptible_lock_irq_timeout(udc->service_thread_wq,
         kthread_should_stop() || udc->service_request, udc->wq_lock, msecs_to_jiffies(500));
       spin_unlock_irqrestore(&udc->wq_lock, flags);
 
       if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
-        dev_info(udc->dev, "usb hub service is waken up by mcu irq the hub\n");
+        //dev_info(udc->dev, "usb hub service is waken up by mcu irq the hub\n");
       }
-      //schedule_hrtimeout(&kt, HRTIMER_MODE_REL);
-
       if (kthread_should_stop())
         break;
 
 		}
-
-    set_current_state(TASK_RUNNING);
-
 		loop_again = 0;
 
 		mutex_lock(&udc->spi_bus_mutex);
