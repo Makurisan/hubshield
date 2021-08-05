@@ -418,8 +418,9 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
       }
       spin_unlock_irqrestore(&udc->lock, flags);
 
-      spin_lock_irqsave(&udc->wq_lock, flags);
       set_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
+
+      spin_lock_irqsave(&udc->wq_lock, flags);
       wake_up_interruptible(&udc->service_thread_wq);
       spin_unlock_irqrestore(&udc->wq_lock, flags);
 
@@ -498,6 +499,8 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     udc->irq_map.USBIRQ &= ~HRESIRQ;
     // connect the usb to the host   
     udc->spitransfer[0] = REG_CPUCTL;
+
+// firmware version auslesen, is chip compatible
     udc->spitransfer[1] = SOFTCONT;
     vusb_write_buffer(udc, VUSB_REG_SET, udc->spitransfer, 2);
     return true;
@@ -544,8 +547,8 @@ static int vusb_thread(void *dev_id)
 			spin_unlock_irqrestore(&udc->lock, flags);
       
       spin_lock_irqsave(&udc->wq_lock, flags);
-      wait_event_interruptible_timeout(udc->service_thread_wq,
-        kthread_should_stop() || udc->service_request, msecs_to_jiffies(500));
+      wait_event_interruptible_lock_irq_timeout(udc->service_thread_wq,
+        kthread_should_stop() || udc->service_request, udc->wq_lock, msecs_to_jiffies(500));
       spin_unlock_irqrestore(&udc->wq_lock, flags);
 
       if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
@@ -764,7 +767,7 @@ static int vusb_probe(struct spi_device *spi)
   udc->mcu_irq = gpio_to_irq(GPIO_LISTEN_IRQ_PIN);
   dev_info(&udc->spi->dev, "GPIO for mcu listen hwirq %d is irq %d.\n", GPIO_LISTEN_IRQ_PIN, udc->mcu_irq);
   rc = devm_request_threaded_irq(&udc->spi->dev, udc->mcu_irq, NULL,
-    vusb_mcu_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_RISING, "vusbirq", udc);
+    vusb_mcu_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbirq", udc);
   if (rc)
   {
     dev_err(&udc->spi->dev, "Failed to request listen hwirq interrupt\n");
