@@ -434,21 +434,20 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 	bool ret = false;
   int rc;
 
-  // read all mcu IRQs    
-  if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
+  // read only if something is to do
+  if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0) {
     return false;
   }
 
+  // read all mcu IRQs  
+  if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
+    return false; 
+  }
   //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ);
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
   u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
-
-// debug test...
-  //if (0 == vusb_read_buffer(udc, VUSB_REG_DEBUG, udc->spitransfer, 4)) {
-  //  return false;
-  //}
 
   // check the first bit set
   if (_bf_popcount(pipeirq)) {
@@ -531,6 +530,7 @@ static int vusb_thread(void *dev_id)
 	int i, loop_again = 1;
 	unsigned long flags;
   int ret;
+  int rc;
 
 	while (!kthread_should_stop()) {
 
@@ -544,13 +544,10 @@ static int vusb_thread(void *dev_id)
       
       // wait interruptible
       spin_lock_irqsave(&udc->wq_lock, flags);
-      wait_event_interruptible_lock_irq_timeout(udc->service_thread_wq,
+      rc = wait_event_interruptible_lock_irq_timeout(udc->service_thread_wq,
         kthread_should_stop() || udc->service_request, udc->wq_lock, msecs_to_jiffies(500));
       spin_unlock_irqrestore(&udc->wq_lock, flags);
 
-      if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
-        //dev_info(udc->dev, "usb hub service is waken up by mcu irq the hub\n");
-      }
       if (kthread_should_stop())
         break;
 
@@ -558,6 +555,12 @@ static int vusb_thread(void *dev_id)
 		loop_again = 0;
 
 		mutex_lock(&udc->spi_bus_mutex);
+
+    /* wait event with timeout elapsed */
+    if (rc == 0) {
+      //dev_info(udc->dev, "thread timeout value: %d ...\n", udc->service_request);
+      goto loop;
+    }
 
  		/* If disconnected */
 		if (!udc->softconnect)

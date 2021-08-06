@@ -178,18 +178,19 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
     wakeup_flag = 0;
     rc = wait_event_interruptible_timeout(udc->spi_read_queue, wakeup_flag, WAIT_UNTIL_GPIO_ASSERTED);
     wait_time = ktime_to_us(wait_endtime - wait_starttime);
-    if(wait_time > 4000)
-    UDCVDBG(udc, "Mcu wait time(us): %d\n", wait_time);
+    if (wait_time > 4000) {
+      UDCVDBG(udc, "Mcu wait time(us): %d\n", wait_time);
+    }
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {
       //UDCVDBG(udc, "Mcu wait event error for spi read\n");
-      return -6;
+      memset(udc->spitransfer + VUSB_SPI_HEADER, 0, length );
+      rc = -6;
     }
   }
   return rc;
 }
-
 
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
