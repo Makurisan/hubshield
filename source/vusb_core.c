@@ -435,7 +435,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   int rc;
 
   // read only if something is to do
-  if (test_and_clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0) {
+  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0) {
     return false;
   }
 
@@ -449,8 +449,13 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
   u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
 
+  // clear only if we have one to do
+  if((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
+    clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
+  }
+
   // check the first bit set
-  if (_bf_popcount(pipeirq)) {
+  if(hweight32(pipeirq)) {
     UDCVDBG(udc, "USB-Pipe bitpos: %x index: %x\n", pipeirq, pipeirq>>1);
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = pipeirq;
