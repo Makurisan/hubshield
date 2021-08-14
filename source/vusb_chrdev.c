@@ -57,8 +57,8 @@ const vusb_send_t vusb_send_tab[] = {
     { "r",   /*cmd*/ VUSB_REG_RESET,       "REG_RESET",   /*port*/ 0, 1},
     { "a",   /*cmd*/ VUSB_REG_HWATTACH,    "REG_HWATTACH",/*port*/ 0, 1},
     { "d",   /*cmd*/ VUSB_REG_HWDETACH,    "REG_HWDETACH",/*port*/ 1, 1},
-    { "+",   /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",  /*port*/ 2, 1},
-    { "-",   /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",  /*port*/ 2, 1},
+    { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",  /*port*/ 0, 2},
+    { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",  /*port*/ 0, 2},
    // debug 
     { "p",   /*cmd*/ VUSB_REG_MEMORY,   "REG_MEMORY",  /*port*/ 0, 1},
     { "s",   /*cmd*/ VUSB_REG_PRINTF,   "REG_PRINTF",  /*port*/ 0, 1},
@@ -115,7 +115,12 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
       }
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
         memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
-        *udc->transfer = vusb_send_tab[j].port;
+        udc->transfer[0] = vusb_send_tab[j].port;
+        if (vusb_send_tab[j].length > 1) {
+          udc->transfer[1] = '1';
+          if (isdigit(data[i + 1]))
+            udc->transfer[1] = data[i+1];
+        }
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
         msleep_interruptible(100);
         break;
