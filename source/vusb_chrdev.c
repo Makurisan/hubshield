@@ -66,7 +66,7 @@ const vusb_send_t vusb_send_tab[] = {
     { "u",   /*cmd*/ VUSB_REG_PRINTF2,  "REG_PRINTF",  /*port*/ 0, 1},
     { "v",   /*cmd*/ VUSB_REG_PRINTF3,  "REG_PRINTF",  /*port*/ 0, 1},
     { "w",   /*cmd*/ VUSB_REG_PRINTF4,  "REG_PRINTF",  /*port*/ 0, 1},
-    { "x",   /*cmd*/ VUSB_REG_PRINTF5,  "REG_PRINTF",  /*port*/ 0, 1},
+    { "x",   /*cmd*/ VUSB_REG_PRINTF99, "REG_PRINTF",  /*port*/ 0, 1},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
@@ -107,6 +107,12 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
   size_t i, j;
   for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
+      if (data[i] == 'x') {
+        gpiod_set_value(udc->mcu_gpreset, 0);
+        msleep_interruptible(100);
+        gpiod_set_value(udc->mcu_gpreset, 1);
+        break;
+      }
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
         memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
         *udc->transfer = vusb_send_tab[j].port;

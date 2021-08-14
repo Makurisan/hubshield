@@ -30,7 +30,7 @@
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
 				interrupts = <5 0 6 0>; /* IRQ_TYPE_EDGE_FALLING */
-				reset-gpio = <&gpio 24 1>; // GPIO_ACTIVE_HIGH
+				reset-gpio = <&gpio 24 4>; // Bit 0: 1 means active low/ Bit 2:1 means open drain
 				max-ports = <5>; // count of virtual hub ports
 				spi_dtrdy = <6>;  
 				spi_irq = <5>;  

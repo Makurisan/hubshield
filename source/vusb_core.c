@@ -774,6 +774,14 @@ static int vusb_probe(struct spi_device *spi)
     rc = -ENOMEM;
     goto err;
   }
+#define _RESET_PIN
+#ifdef _RESET_PIN
+#define GPIO_RESET_PIN 24
+  /* GPIO for mcu chip reset */
+  udc->mcu_gpreset = devm_gpiod_get(&udc->spi->dev, "reset", GPIOD_OUT_HIGH_OPEN_DRAIN);
+  dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%x\n", udc->mcu_gpreset);
+  gpiod_set_value(udc->mcu_gpreset, 1);
+#endif
 
   // our thread wait queue
   init_waitqueue_head(&udc->service_thread_wq);

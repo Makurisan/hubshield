@@ -34,6 +34,7 @@
 #define VUSB_REG_PRINTF3	  0x33
 #define VUSB_REG_PRINTF4	  0x34
 #define VUSB_REG_PRINTF5	  0x35
+#define VUSB_REG_PRINTF99	  0x99
 
  // irq register
 #define VUSB_REG_IRQ_GET    0x10
@@ -216,7 +217,8 @@ struct vusb_udc {
   vusb_req_map_t irq_map;
 
   /* GPIO SPI IRQs */
-  int irq_reset;
+  struct gpio_desc* mcu_gpreset;
+  int mcu_reset;
   int spi_datrdy;
   int mcu_irq;
 
