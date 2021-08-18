@@ -18,6 +18,8 @@
           t.io.println('Send error: ' + error);
         });
       }
+    };
+
     io.sendString = str => {
       if (port !== undefined) {
         port.send(textEncoder.encode(str)).catch(error => {
