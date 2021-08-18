@@ -14,21 +14,21 @@
     console.log('Terminal ready.');
     let io = t.io.push();
 
-    io.onVTKeystroke = str => {
-      if (port !== undefined) {
-        port.send(textEncoder.encode(str)).catch(error => {
-          t.io.println('Send error: ' + error);
-        });
-      }
-    };
+    //io.onVTKeystroke = str => {
+    //  if (port !== undefined) {
+    //    port.send(textEncoder.encode(str)).catch(error => {
+    //      t.io.println('Send error: ' + error);
+    //    });
+    //  }
+    //};
 
-    io.sendString = str => {
-      if (port !== undefined) {
-        port.send(textEncoder.encode(str)).catch(error => {
-          t.io.println('Send error: ' + error);
-        });
-      }
-    };
+    //io.sendString = str => {
+    //  if (port !== undefined) {
+    //    port.send(textEncoder.encode(str)).catch(error => {
+    //      t.io.println('Send error: ' + error);
+    //    });
+    //  }
+    //};
 
     t.decorate(document.querySelector('#terminal')); 
     t.setWidth(80);
