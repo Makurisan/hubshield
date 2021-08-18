@@ -12,39 +12,12 @@
     console.log('Terminal ready.');
     let io = t.io.push();
 
-    function printPrompt() {
-        io.print(
-            '\x1b[38:2:51:105:232mh' +
-            '\x1b[38:2:213:15:37mt' +
-            '\x1b[38:2:238:178:17me' +
-            '\x1b[38:2:51:105:232mr' +
-            '\x1b[38:2:0:153:37mm' +
-            '\x1b[38:2:213:15:37m>' +
-            '\x1b[0m ');
-    }
-
     io.onVTKeystroke = str => {
       if (port !== undefined) {
         port.send(textEncoder.encode(str)).catch(error => {
           t.io.println('Send error: ' + error);
         });
       }
-    switch (str) {
-        case '\r':
-            io.println('');
-            printPrompt();
-            break;
-        case '\x7f':
-            // \x08 = backspace, \x1b[K = 'Erase in line'.
-            io.print('\x08\x1b[K');
-            break;
-        default:
-            io.print(string);
-            break;
-    }
-
-    };
-
     io.sendString = str => {
       if (port !== undefined) {
         port.send(textEncoder.encode(str)).catch(error => {
