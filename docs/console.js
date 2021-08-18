@@ -34,7 +34,7 @@
 
     t.decorate(document.querySelector('#terminal'));
     t.setWidth(100);
-    t.setHeight(40);
+    t.setHeight(60);
     t.installKeyboard();
 
     function connect() {
