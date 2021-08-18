@@ -7,7 +7,7 @@
 
   let textEncoder = new TextEncoder();
 
-  console.log('starting terminal...');
+  console.log('Starting terminal...');
 
   let t = new hterm.Terminal();
   t.onTerminalReady = () => {
@@ -34,7 +34,7 @@
   document.addEventListener('DOMContentLoaded', event => {
     let connectButton = document.querySelector('#connect');
 
-    t.decorate(document.querySelector('#terminal'));
+   /* t.decorate(document.querySelector('#terminal')); */
     t.setWidth(80);
     t.setHeight(24);
     t.installKeyboard();
