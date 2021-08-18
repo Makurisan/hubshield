@@ -29,7 +29,7 @@
           t.io.println('Send error: ' + error);
         });
       }
-    switch (string) {
+    switch (str) {
         case '\r':
             io.println('');
             printPrompt();
