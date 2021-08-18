@@ -33,8 +33,8 @@
     let connectButton = document.querySelector('#connect');
 
     t.decorate(document.querySelector('#terminal'));
-    t.setWidth(80);
-    t.setHeight(24);
+    t.setWidth(100);
+    t.setHeight(40);
     t.installKeyboard();
 
     function connect() {
