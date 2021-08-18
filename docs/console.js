@@ -7,6 +7,8 @@
 
   let textEncoder = new TextEncoder();
 
+  console.log('starting terminal...');
+
   let t = new hterm.Terminal();
   t.onTerminalReady = () => {
     console.log('Terminal ready.');
