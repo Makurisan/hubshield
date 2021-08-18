@@ -9,7 +9,7 @@
 
   console.log('Starting terminal...');
 
-  let t = new hterm.Terminal();
+  let t = new hterm.Terminal('opt_prof');
   t.onTerminalReady = () => {
     console.log('Terminal ready.');
     let io = t.io.push();
