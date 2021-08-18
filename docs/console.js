@@ -28,9 +28,9 @@
   };
 
   document.addEventListener('DOMContentLoaded', event => {
-    let connectButton = document.querySelector('#connect');
+    let connectButton = document.querySelector('connect');
 
-    t.decorate(document.querySelector('#terminal'));
+    t.decorate(document.querySelector('terminal'));
     t.setWidth(100);
     t.setHeight(60);
     t.installKeyboard();
