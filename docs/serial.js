@@ -11,8 +11,9 @@ var serial = {};
 
   serial.requestPort = function() {
     const filters = [
-      { 'vendorId': 0x2341, 'productId': 0x8036 }, // https://webusb.github.io/arduino/demos/rgb/
-      { 'vendorId': 0x1209 }, // Adafruit Boards!
+        { 'vendorId': 0x1209, 'productId': 0xa800 },
+        { 'vendorId': 0x2341, 'productId': 0x8036 }, // https://webusb.github.io/arduino/demos/rgb/
+      { 'vendorId': 0x1209 }, // SPI usbhub
     ];
     return navigator.usb.requestDevice({ 'filters': filters }).then(
       device => new serial.Port(device)
