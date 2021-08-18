@@ -9,7 +9,7 @@
 
   console.log('Starting terminal...');
 
-  let t = new hterm.Terminal('opt_prof');
+  let t = new hterm.Terminal();
   t.onTerminalReady = () => {
     console.log('Terminal ready.');
     let io = t.io.push();
@@ -29,15 +29,17 @@
         });
       }
     };
+
+    t.decorate(document.querySelector('#terminal')); 
+    t.setWidth(80);
+    t.setHeight(24);
+    t.installKeyboard();
+
   };
 
   document.addEventListener('DOMContentLoaded', event => {
     let connectButton = document.querySelector('#connect');
 
-    //t.decorate(document.querySelector('#terminal')); 
-    t.setWidth(80);
-    t.setHeight(24);
-    t.installKeyboard();
 
     function connect() {
       t.io.println('Connecting to ' + port.device_.productName + '...');
