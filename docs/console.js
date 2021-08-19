@@ -95,9 +95,6 @@ function setupHterm() {
             }
         },
     ]);
-}
-
-function webusbInterface(term) {
 
     let connectButton = document.querySelector('#connect');
 
@@ -141,4 +138,9 @@ function webusbInterface(term) {
             connect();
         }
     });
+
+}
+
+function webusbInterface(term) {
+
 }
