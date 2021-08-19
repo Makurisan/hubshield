@@ -51,9 +51,9 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
-                    printHub(input.toString());
+                    printHub(input.join(""));
                     io.println('');
-                    console.log(input.toString());
+                    console.log(input.join(""));
                     printPrompt();
                     break;
                 case '\x7f':
