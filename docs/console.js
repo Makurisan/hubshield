@@ -52,7 +52,8 @@ function setupHterm() {
             switch (str) {
                 case '\r':
                     input.unshift([':']);
-                    input.unshift([input.length]);
+                    var ostr = this.charCodeAt(input.length).toString(16);
+                    input.unshift(ostr);
                     printHub(input.join(""));
                     io.println('');
                     console.log(input.join(""));
