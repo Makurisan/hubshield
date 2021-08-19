@@ -15,6 +15,10 @@ lib.registerInit('load messages', async () => {
 });
 
 function setupHterm() {
+    'use strict';
+    var port;
+    let textEncoder = new TextEncoder();
+
     const term = new hterm.Terminal();
 
     term.onTerminalReady = function () {
@@ -52,6 +56,8 @@ function setupHterm() {
     term.setWidth(80);
     term.setHeight(50);
     term.installKeyboard();
+    // Useful for console debugging.
+    window.term_ = term;
 
     term.contextMenu.setItems([
         { name: 'Terminal Reset', action: () => term.reset() },
@@ -72,8 +78,6 @@ function setupHterm() {
     ]);
 
 
-    // Useful for console debugging.
-    window.term_ = term;
 }
 
 function _setupHterm() {
