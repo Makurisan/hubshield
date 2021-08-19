@@ -106,7 +106,7 @@ function setupHterm() {
             } else {
                 serial.requestPort().then(selectedPort => {
                     port = selectedPort;
-                    // connect();
+                    connect();
                 }).catch(error => {
                     term.io.println('Connection error: ' + error);
                 });
@@ -118,7 +118,7 @@ function setupHterm() {
                 term.io.println('No devices found.');
             } else {
                 port = ports[0];
-                // connect();
+                connect();
             }
         });
     });
