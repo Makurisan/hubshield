@@ -1,3 +1,20 @@
+function initContent(io) {
+    const ver = lib.resource.getData('hterm/changelog/version');
+    const date = lib.resource.getData('hterm/changelog/date');
+    const pkg = `hterm ${ver} (${date})`;
+    /* eslint-disable quotes */
+    io.println("\r\n\\r\n\
+                                   Welcome to SPI hub device!\r\n\
+                    Press F11 to go fullscreen to use all shortcuts.\r\n\
+                           Running " + pkg + ".\r\n\
+");
+    /* eslint-enable quotes */
+}
+
+// Load translations if available.
+lib.registerInit('load messages', async () => {
+});
+
 function setupHterm() {
     const term = new hterm.Terminal();
 
