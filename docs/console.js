@@ -77,6 +77,53 @@ function setupHterm() {
         },
     ]);
 
+    document.addEventListener('DOMContentLoaded', event => {
+        let connectButton = document.querySelector('#connect');
+
+
+
+        function connect() {
+            term.io.println('Connecting to ' + port.device_.productName + '...');
+            port.connect().then(() => {
+                console.log(port);
+                term.io.println('Connected.');
+                connectButton.textContent = 'Disconnect';
+                port.onReceive = data => {
+                    let textDecoder = new TextDecoder();
+                    term.io.print(textDecoder.decode(data));
+                }
+                port.onReceiveError = error => {
+                    term.io.println('Receive error: ' + error);
+                };
+            }, error => {
+                term.io.println('Connection error: ' + error);
+            });
+        };
+
+        connectButton.addEventListener('click', function () {
+            if (port) {
+                port.disconnect();
+                connectButton.textContent = 'Connect';
+                port = null;
+            } else {
+                serial.requestPort().then(selectedPort => {
+                    port = selectedPort;
+                    // connect();
+                }).catch(error => {
+                    term.io.println('Connection error: ' + error);
+                });
+            }
+        });
+
+        serial.getPorts().then(ports => {
+            if (ports.length == 0) {
+                term.io.println('No devices found.');
+            } else {
+                port = ports[0];
+                // connect();
+            }
+        });
+    });
 
 }
 
