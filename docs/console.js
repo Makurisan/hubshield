@@ -14,7 +14,7 @@ function initContent(io) {
 lib.registerInit('load messages', async () => {
 });
 
-let term;
+var term;
 
 function setupHterm(vterm) {
 
