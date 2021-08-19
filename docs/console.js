@@ -1,9 +1,5 @@
-(async function() {
+(function() {
   'use strict';
-
-  await lib.init();
-
- // hterm.defaultStorage = new lib.Storage.Local();
 
   var port;
 
