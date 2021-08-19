@@ -24,6 +24,7 @@ function setupHterm() {
 
     var port;
     var term = new hterm.Terminal();
+    let textEncoder = new TextEncoder();
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -33,7 +34,7 @@ function setupHterm() {
                 '\x1b[0m ');
         }
 
-        io.onVTKeystroke = (string) => {
+        io.onVTKeystroke = string => {
             switch (string) {
                 case '\r':
                     io.println('');
@@ -48,7 +49,10 @@ function setupHterm() {
                     break;
             }
         };
-        io.sendString = io.print;
+        io.sendString = string => {
+            io.print(string);
+        };
+
         initContent(io);
         printPrompt();
         this.setCursorVisible(true);
