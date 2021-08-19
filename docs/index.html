@@ -40,6 +40,10 @@
     <div id='terminal'></div>
     <script>
 
+        document.addEventListener('DOMContentLoaded', (event) => {
+            console.log('DOM fully loaded and parsed');
+        });
+
         window.onload = async function () {
             await lib.init();
             setupHterm();
