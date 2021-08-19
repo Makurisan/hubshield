@@ -91,7 +91,6 @@ function webusbInterface(term) {
         term.io.println('Connecting to ' + port.device_.productName + '...');
         port.connect().then(() => {
             console.log(port);
-            term.io.print('Connected.\r');
             connectButton.textContent = 'Disconnect';
             port.onReceive = data => {
                 let textDecoder = new TextDecoder();
