@@ -1,4 +1,4 @@
-(function() {
+function setupHterm() {
   'use strict';
 
   var port;
@@ -81,4 +81,5 @@
       }
     });
   });
-})();
+
+}
