@@ -78,8 +78,7 @@ function setupHterm() {
     term.installKeyboard();
     // Useful for console debugging.
     window.term_ = term;
-    webusbInterface(term);
-
+ 
     term.contextMenu.setItems([
         { name: 'Terminal Reset', action: () => term.reset() },
         { name: 'Terminal Clear', action: () => term.clear() },
