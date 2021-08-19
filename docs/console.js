@@ -20,8 +20,6 @@ function setupHterm() {
 
     'use strict';
     var port;
-    let textEncoder = new TextEncoder();
-
 
     term.onTerminalReady = function () {
         const io = this.io.push();
