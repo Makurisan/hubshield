@@ -13,7 +13,7 @@
   var pm = new hterm.Persistencemanager('spi-hub');
   pm.set('foreground-color', 'black');
 
-  let term = new hterm.Terminal();
+  let term = new hterm.Terminal('spi-hub');
 
   term.onTerminalReady = () => {
     console.log('Terminal ready.');
