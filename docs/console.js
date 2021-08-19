@@ -47,10 +47,12 @@ function setupHterm() {
                 case '\r':
                     io.println('');
                     printPrompt();
+                    printHub('\n');
                     break;
                 case '\x7f':
                     // \x08 = backspace, \x1b[K = 'Erase in line'.
                     io.print('\x08\x1b[K');
+                    printHub('\x7f');
                     break;
                 default:
                     io.print(str);
