@@ -30,6 +30,7 @@ function setupHterm() {
 
     var term = new hterm.Terminal();
     let textEncoder = new TextEncoder();
+    let input=[];
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -52,8 +53,7 @@ function setupHterm() {
                 case '\r':
                     //printHub('\n');
                     io.println('');
-                    console.log(term.getRowCount() + ":");
-                    console.log(term.getRowText(term.getRowCount() - 1));
+                    console.log(input);
                     printPrompt();
                     break;
                 case '\x7f':
@@ -63,6 +63,7 @@ function setupHterm() {
                     break;
                 default:
                     io.print(str);
+                    input.push(str);
                     printHub(str);
                     break;
             }
