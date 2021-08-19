@@ -14,13 +14,14 @@ function initContent(io) {
 lib.registerInit('load messages', async () => {
 });
 
+const term = new hterm.Terminal();
+
 function setupHterm() {
 
     'use strict';
     var port;
     let textEncoder = new TextEncoder();
 
-    const term = new hterm.Terminal();
 
     term.onTerminalReady = function () {
         const io = this.io.push();
