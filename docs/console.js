@@ -7,15 +7,16 @@
 
   let textEncoder = new TextEncoder();
 
-  let t = new hterm.Terminal();
-  t.onTerminalReady = () => {
+    let term = new hterm.Terminal();
+
+  term.onTerminalReady = () => {
     console.log('Terminal ready.');
-    let io = t.io.push();
+    let io = term.io.push();
 
     io.onVTKeystroke = str => {
       if (port !== undefined) {
         port.send(textEncoder.encode(str)).catch(error => {
-          t.io.println('Send error: ' + error);
+          term.io.println('Send error: ' + error);
         });
       }
     };
@@ -23,35 +24,37 @@
     io.sendString = str => {
       if (port !== undefined) {
         port.send(textEncoder.encode(str)).catch(error => {
-          t.io.println('Send error: ' + error);
+          term.io.println('Send error: ' + error);
         });
       }
     };
+
+      term.decorate(document.querySelector('#terminal'));
+      term.setWidth(80);
+      term.setHeight(50);
+      term.installKeyboard();
   };
 
   document.addEventListener('DOMContentLoaded', event => {
     let connectButton = document.querySelector('#connect');
 
-    t.decorate(document.querySelector('#terminal'));
-    t.setWidth(80);
-    t.setHeight(50);
-    t.installKeyboard();
+
 
     function connect() {
-      t.io.println('Connecting to ' + port.device_.productName + '...');
+      term.io.println('Connecting to ' + port.device_.productName + '...');
       port.connect().then(() => {
         console.log(port);
-        t.io.println('Connected.');
+        term.io.println('Connected.');
         connectButton.textContent = 'Disconnect';
         port.onReceive = data => {
           let textDecoder = new TextDecoder();
-          t.io.print(textDecoder.decode(data));
+          term.io.print(textDecoder.decode(data));
         }
         port.onReceiveError = error => {
-          t.io.println('Receive error: ' + error);
+          term.io.println('Receive error: ' + error);
         };
       }, error => {
-        t.io.println('Connection error: ' + error);
+        term.io.println('Connection error: ' + error);
       });
     };
 
@@ -65,14 +68,14 @@
           port = selectedPort;
           connect();
         }).catch(error => {
-          t.io.println('Connection error: ' + error);
+          term.io.println('Connection error: ' + error);
         });
       }
     });
 
     serial.getPorts().then(ports => {
       if (ports.length == 0) {
-        t.io.println('No devices found.');
+        term.io.println('No devices found.');
       } else {
         port = ports[0];
         connect();
