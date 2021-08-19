@@ -88,7 +88,7 @@ function webusbInterface(term) {
     let connectButton = document.querySelector('#connect');
 
     function connect() {
-        term.io.println('Connecting to ' + port.device_.productName + '...');
+        //term.io.println('Connecting to ' + port.device_.productName + '...');
         port.connect().then(() => {
             console.log(port);
             connectButton.textContent = 'Disconnect';
