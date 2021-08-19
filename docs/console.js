@@ -54,6 +54,7 @@ function setupHterm() {
                     printHub(input.join(""));
                     io.println('');
                     console.log(input.join(""));
+                    input = [];
                     printPrompt();
                     break;
                 case '\x7f':
