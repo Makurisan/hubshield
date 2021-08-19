@@ -1,5 +1,5 @@
 //
-//
+// from google example
 //
 
 function initContent(io) {
@@ -143,6 +143,3 @@ function setupHterm() {
 
 }
 
-function webusbInterface(term) {
-
-}
