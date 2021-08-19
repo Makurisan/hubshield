@@ -10,7 +10,10 @@
   let textEncoder = new TextEncoder();
 
   hterm.defaultStorage = new lib.Storage.Local();
-  let term = new hterm.Terminal('spi-hub');
+  var pm = lib.Persistencemanager('spi-hub');
+  pm.set('foreground-color', 'black');
+
+   let term = new hterm.Terminal('spi-hub');
 
   term.onTerminalReady = () => {
     console.log('Terminal ready.');
