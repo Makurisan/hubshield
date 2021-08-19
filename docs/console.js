@@ -9,7 +9,19 @@
 
   let textEncoder = new TextEncoder();
 
-    let term = new hterm.Terminal();
+  let term = new hterm.Terminal();
+
+    // Load translations if available.
+  lib.registerInit('load messages', async () => {
+      // Try to load the messages database from nassh.  This isn't strictly needed
+      // (so if it fails, it should be fine), but does help when testing locally.
+      // $1 here means we search the user's language.  Change it to 'en' or another
+      // specific language to test those specifically.
+      const lang = '$1';
+      await hterm.messageManager.findAndLoadMessages(
+          lib.f.getURL(`../../nassh/_locales/${lang}/messages.json`));
+  });
+
 
   term.onTerminalReady = () => {
     console.log('Terminal ready.');
