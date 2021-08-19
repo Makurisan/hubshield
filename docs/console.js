@@ -51,6 +51,7 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
+                    input.unshift([':']);
                     input.unshift([input.length]);
                     printHub(input.join(""));
                     io.println('');
