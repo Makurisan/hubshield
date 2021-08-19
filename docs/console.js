@@ -80,8 +80,6 @@ function setupHterm() {
     document.addEventListener('DOMContentLoaded', event => {
         let connectButton = document.querySelector('#connect');
 
-
-
         function connect() {
             term.io.println('Connecting to ' + port.device_.productName + '...');
             port.connect().then(() => {
