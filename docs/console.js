@@ -1,7 +1,7 @@
-(function() {
+(async function() {
   'use strict';
 
-  lib.init();
+  await lib.init();
 
  // hterm.defaultStorage = new lib.Storage.Local();
 
