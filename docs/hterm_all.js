@@ -13020,7 +13020,7 @@ hterm.ScrollPort.prototype.blur = function () {
 
 /** @param {string} image */
 hterm.ScrollPort.prototype.setBackgroundImage = function (image) {
-    this.screen_.style.backgroundImage = image;
+    this.screen_.style.backgroundImage = image; 
 };
 
 /** @param {string} size */
