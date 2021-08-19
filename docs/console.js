@@ -125,4 +125,4 @@ function webusbInterface() {
             connect();
         }
     });
-});
+}
