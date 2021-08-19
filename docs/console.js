@@ -1,6 +1,8 @@
 //
 // from google example
 //
+//  https://chromium.googlesource.com/apps/libapps/+/refs/heads/main/hterm/doc/embed.md
+//
 
 function initContent(io) {
     const ver = lib.resource.getData('hterm/changelog/version');
@@ -23,6 +25,9 @@ function setupHterm() {
     'use strict';
 
     var port;
+
+    hterm.defaultStorage = new lib.Storage.Local();
+
     var term = new hterm.Terminal();
     let textEncoder = new TextEncoder();
 
