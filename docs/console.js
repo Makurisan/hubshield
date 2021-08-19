@@ -9,7 +9,7 @@
 
   let textEncoder = new TextEncoder();
 
-  let term;
+  let term = new hterm.Terminal();
 
   term.onTerminalReady = () => {
     console.log('Terminal ready.');
@@ -40,7 +40,7 @@
   document.addEventListener('DOMContentLoaded', event => {
     let connectButton = document.querySelector('#connect');
 
-      term = new hterm.Terminal();
+      
 
     function connect() {
       term.io.println('Connecting to ' + port.device_.productName + '...');
