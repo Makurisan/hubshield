@@ -14617,9 +14617,9 @@ hterm.Terminal.prototype.setProfile = function (
             terminal.setBackgroundColor(v);
         },
 
-        'background-image': function (v) {
-            terminal.scrollPort_.setBackgroundImage(v);
-        },
+        //'background-image': function (v) {
+        //    terminal.scrollPort_.setBackgroundImage(v);
+        //},
 
         'background-size': function (v) {
             terminal.scrollPort_.setBackgroundSize(v);
@@ -15978,8 +15978,8 @@ hterm.Terminal.prototype.decorate = function (div) {
  * @private
  */
 hterm.Terminal.prototype.setupScrollPort_ = function () {
-    this.scrollPort_.setBackgroundImage(
-        this.prefs_.getString('background-image'));
+    //this.scrollPort_.setBackgroundImage(
+    //    this.prefs_.getString('background-image'));
     this.scrollPort_.setBackgroundSize(this.prefs_.getString('background-size'));
     this.scrollPort_.setBackgroundPosition(
         this.prefs_.getString('background-position'));
