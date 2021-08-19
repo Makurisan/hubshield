@@ -18,13 +18,12 @@ function initContent(io) {
 lib.registerInit('load messages', async () => {
 });
 
-var term;
-
 function setupHterm() {
 
     'use strict';
+
     var port;
-    term = new hterm.Terminal();
+    var term = new hterm.Terminal();
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -63,6 +62,7 @@ function setupHterm() {
     term.installKeyboard();
     // Useful for console debugging.
     window.term_ = term;
+    webusbInterface(term);
 
     term.contextMenu.setItems([
         { name: 'Terminal Reset', action: () => term.reset() },
@@ -83,7 +83,7 @@ function setupHterm() {
     ]);
 }
 
-function webusbInterface() {
+function webusbInterface(term) {
 
     let connectButton = document.querySelector('#connect');
 
