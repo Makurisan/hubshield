@@ -3,7 +3,7 @@
 
   lib.init();
 
-  hterm.defaultStorage = new lib.Storage.Local();
+ // hterm.defaultStorage = new lib.Storage.Local();
 
   var port;
 
