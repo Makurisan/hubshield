@@ -22,9 +22,17 @@
 
   </head>
   <body>
-    <p>
-      <button id="connect">Connect</button>
-    </p>
-    <div id="terminal"></div>
+      <p>
+          <button id="connect">Connect</button>
+      </p>
+      <div id="terminal"></div>
+
+  <script>
+      window.onload = async function() {
+      await lib.init();
+      //setupHterm();
+      };
+  </script>
+
   </body>
 </html>
