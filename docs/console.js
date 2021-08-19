@@ -50,9 +50,9 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
-                    printHub('\n');
-                    //io.println('');
-                    console.log(term.getRowText(term.getRowCount() - 1));
+                    printHub('\r');
+                    io.println('');
+                    console.log(term.getRowText(1));
                     printPrompt();
 
                     break;
