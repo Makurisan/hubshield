@@ -51,8 +51,8 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
-                    input.unshift([':']);
-                    input.unshift(input.length.toString());
+                    // print the length in front of the string max: 0xFF
+                    input.unshift(String.fromCharCode(input.length));
                     printHub(input.join(""));
                     io.println('');
                     console.log(input.join(""));
