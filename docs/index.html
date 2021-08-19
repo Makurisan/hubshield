@@ -41,21 +41,7 @@
             const date = lib.resource.getData('hterm/changelog/date');
             const pkg = `hterm ${ver} (${date})`;
             /* eslint-disable quotes */
-            io.println("\r\n\
-                                .--~~~~~~~~~~~~~------.\r\n\
-                               /--===============------\\\r\n\
-                               | |```````````````|     |\r\n\
-                               | |               |     |\r\n\
-                               | |      >_<      |     |\r\n\
-                               | |               |     |\r\n\
-                               | |_______________|     |\r\n\
-                               |                   ::::|\r\n\
-                               '======================='\r\n\
-                               //-'-'-'-'-'-'-'-'-'-'-\\\\\r\n\
-                              //_'_'_'_'_'_'_'_'_'_'_'_\\\\\r\n\
-                              [-------------------------]\r\n\
-                              \\_________________________/\r\n\
-\r\n\
+            io.println("\r\n\\r\n\
                                    Welcome to hterm!\r\n\
                     Press F11 to go fullscreen to use all shortcuts.\r\n\
                            Running " + pkg + ".\r\n\
@@ -74,12 +60,7 @@
                 const io = this.io.push();
                 function printPrompt() {
                     io.print(
-                        '\x1b[38:2:51:105:232mh' +
-                        '\x1b[38:2:213:15:37mt' +
-                        '\x1b[38:2:238:178:17me' +
-                        '\x1b[38:2:51:105:232mr' +
-                        '\x1b[38:2:0:153:37mm' +
-                        '\x1b[38:2:213:15:37m>' +
+                        '\x1b[38:2:51:105:232mspihub>' +
                         '\x1b[0m ');
                 }
 
