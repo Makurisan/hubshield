@@ -51,20 +51,19 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
-                    //printHub('\n');
+                    printHub(input.toString());
                     io.println('');
-                    console.log(input);
+                    console.log(input.toString());
                     printPrompt();
                     break;
                 case '\x7f':
                     // \x08 = backspace, \x1b[K = 'Erase in line'.
                     io.print('\x08\x1b[K');
-                    printHub('\x7f');
+                    input.push('\x7f');
                     break;
                 default:
                     io.print(str);
                     input.push(str);
-                    printHub(str);
                     break;
             }
         };
