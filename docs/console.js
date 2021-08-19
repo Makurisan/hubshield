@@ -72,7 +72,7 @@ function setupHterm() {
         };
         io.sendString = str => {
             io.print(str);
-            printHub(str);
+         //   printHub(str);
        };
 
         initContent(io);
