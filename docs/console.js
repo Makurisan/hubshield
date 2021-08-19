@@ -9,7 +9,7 @@
 
   let textEncoder = new TextEncoder();
 
-  let term = new hterm.Terminal();
+  let term;
 
     // Load translations if available.
   lib.registerInit('load messages', async () => {
@@ -52,7 +52,7 @@
   document.addEventListener('DOMContentLoaded', event => {
     let connectButton = document.querySelector('#connect');
 
-
+      term = new hterm.Terminal();
 
     function connect() {
       term.io.println('Connecting to ' + port.device_.productName + '...');
