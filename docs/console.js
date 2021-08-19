@@ -18,11 +18,13 @@ function initContent(io) {
 lib.registerInit('load messages', async () => {
 });
 
-function setupHterm(vterm) {
+var term;
+
+function setupHterm() {
 
     'use strict';
     var port;
-    var term = vterm;
+    term = new hterm.Terminal();
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -81,9 +83,8 @@ function setupHterm(vterm) {
     ]);
 }
 
-function webusbInterface(vterm) {
+function webusbInterface() {
 
-    var term = vterm;
     let connectButton = document.querySelector('#connect');
 
     function connect() {

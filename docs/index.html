@@ -39,15 +39,14 @@
     </p>
     <div id='terminal'></div>
     <script>
-        const term = new hterm.Terminal();
         document.addEventListener('DOMContentLoaded', (event) => {
             console.log('DOM fully loaded and parsed');
-            webusbInterface(term);
+            webusbInterface();
         });
 
         window.onload = async function () {
             await lib.init();
-            setupHterm(term);
+            setupHterm();
         };
     </script>
 
