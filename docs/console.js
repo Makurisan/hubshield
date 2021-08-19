@@ -1,6 +1,8 @@
 (function() {
   'use strict';
 
+  lib.init();
+
   hterm.defaultStorage = new lib.Storage.Local();
 
   var port;
