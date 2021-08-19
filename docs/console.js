@@ -12,7 +12,7 @@ function initContent(io) {
     io.println("\r\n\
                    Welcome to SPI Hub Device!\r\n\
          Press F11 to go fullscreen to use all shortcuts.\r\n\
-                     Running " + pkg + ".\r\n\
+                     Running " + "V0.17 8/10/2021 " + ".\r\n\
     ");
 }
 
