@@ -34,8 +34,16 @@ function setupHterm() {
                 '\x1b[0m ');
         }
 
-        io.onVTKeystroke = string => {
-            switch (string) {
+        function printHub(str) {
+            if (port !== undefined) {
+                port.send(textEncoder.encode(str)).catch(error => {
+                    t.io.println('Send error: ' + error);
+                });
+            }
+        }
+
+        io.onVTKeystroke = str => {
+            switch (str) {
                 case '\r':
                     io.println('');
                     printPrompt();
@@ -45,13 +53,15 @@ function setupHterm() {
                     io.print('\x08\x1b[K');
                     break;
                 default:
-                    io.print(string);
+                    io.print(str);
+                    printHub(str);
                     break;
             }
         };
-        io.sendString = string => {
-            io.print(string);
-        };
+        io.sendString = str => {
+            io.print(str);
+            printHub(str);
+       };
 
         initContent(io);
         printPrompt();
