@@ -1,4 +1,4 @@
-function setupHterm() {
+function _setupHterm() {
   'use strict';
 
   var port;
