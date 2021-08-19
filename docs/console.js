@@ -52,6 +52,7 @@ function setupHterm() {
                 case '\r':
                     printHub('\n');
                     //io.println('');
+                    console.log(term.getRowText(term.getRowCount() - 1));
                     printPrompt();
 
                     break;
