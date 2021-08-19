@@ -10,9 +10,7 @@
   let textEncoder = new TextEncoder();
 
   hterm.defaultStorage = new lib.Storage.Local();
-  lib.Persistencemanager('spi-hub');
-  
-   let term = new hterm.Terminal('spi-hub');
+  let term = new hterm.Terminal;
 
   term.onTerminalReady = () => {
     console.log('Terminal ready.');
