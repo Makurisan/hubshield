@@ -30,7 +30,7 @@ function setupHterm() {
 
     var term = new hterm.Terminal();
     let textEncoder = new TextEncoder();
-    let input=[];
+    let input = new Array;
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -56,7 +56,7 @@ function setupHterm() {
                     printHub(input.join(""));
                     io.println('');
                     console.log(input.join(""));
-                    input = [];
+                    input = new Array;
                     printPrompt();
                     break;
                 case '\x7f':
