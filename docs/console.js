@@ -7,10 +7,10 @@ function initContent(io) {
     const date = lib.resource.getData('hterm/changelog/date');
     const pkg = `hterm ${ver} (${date})`;
     /* eslint-disable quotes */
-    io.println("\r\n\r\n\
-                                   Welcome to SPI Hub Device!\r\n\
-                    Press F11 to go fullscreen to use all shortcuts.\r\n\
-                           Running " + pkg + ".\r\n\
+    io.println("\r\n\
+                   Welcome to SPI Hub Device!\r\n\
+         Press F11 to go fullscreen to use all shortcuts.\r\n\
+                     Running " + pkg + ".\r\n\
     ");
 }
 
