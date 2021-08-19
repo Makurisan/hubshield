@@ -1,3 +1,7 @@
+//
+//
+//
+
 function initContent(io) {
     const ver = lib.resource.getData('hterm/changelog/version');
     const date = lib.resource.getData('hterm/changelog/date');
@@ -14,13 +18,11 @@ function initContent(io) {
 lib.registerInit('load messages', async () => {
 });
 
-var term;
-
 function setupHterm(vterm) {
 
     'use strict';
     var port;
-    term = vterm;
+    var term = vterm;
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -79,8 +81,9 @@ function setupHterm(vterm) {
     ]);
 }
 
-function webusbInterface() {
+function webusbInterface(vterm) {
 
+    var term = vterm;
     let connectButton = document.querySelector('#connect');
 
     function connect() {
