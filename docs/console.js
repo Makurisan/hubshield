@@ -3,12 +3,11 @@ function initContent(io) {
     const date = lib.resource.getData('hterm/changelog/date');
     const pkg = `hterm ${ver} (${date})`;
     /* eslint-disable quotes */
-    io.println("\r\n\\r\n\
-                                   Welcome to SPI hub device!\r\n\
+    io.println("\r\n\r\n\
+                                   Welcome to SPI Hub Device!\r\n\
                     Press F11 to go fullscreen to use all shortcuts.\r\n\
                            Running " + pkg + ".\r\n\
-");
-    /* eslint-enable quotes */
+    ");
 }
 
 // Load translations if available.
@@ -45,11 +44,13 @@ function setupHterm() {
         initContent(io);
         printPrompt();
         this.setCursorVisible(true);
-
         this.keyboard.bindings.addBinding('F11', 'PASS');
         this.keyboard.bindings.addBinding('Ctrl+R', 'PASS');
     };
+
     term.decorate(document.querySelector('#terminal'));
+    term.setWidth(80);
+    term.setHeight(50);
     term.installKeyboard();
 
     term.contextMenu.setItems([
@@ -69,6 +70,7 @@ function setupHterm() {
             }
         },
     ]);
+
 
     // Useful for console debugging.
     window.term_ = term;
