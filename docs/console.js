@@ -25,7 +25,7 @@ function setupHterm() {
     'use strict';
 
     var port;
-    var encoded = new Uint8Array;
+    var encoded = new ArrayBuffer;
     var data = {
         "cmd": "",
     };
