@@ -25,7 +25,6 @@ function setupHterm() {
     'use strict';
 
     var port;
-    var encoded = new Uint8Array;
     var data = {
         "cmd": "",
     };
@@ -35,6 +34,7 @@ function setupHterm() {
     var term = new hterm.Terminal();
     let textEncoder = new TextEncoder();
     let input = new Array;
+    var encoded = new Uint8Array;
 
     term.onTerminalReady = function () {
         const io = this.io.push();
@@ -60,8 +60,9 @@ function setupHterm() {
 
                     // test msgpack
                     data.cmd = input.join("");
-                    encoded = msgpack.pack(data);
-                    console.log(encoded.buffer);
+                    encoded = msgpack.pack(data, true);
+
+                    console.log(encoded);
                     printHub(encoded);
                     io.println('');
                      input = new Array;
