@@ -60,8 +60,9 @@ function setupHterm() {
 
                     // test msgpack
                     data.cmd = input.join("");
-                    encoded = msgpack.pack(data).buffer;
-
+                    encoded = msgpack.pack(data);
+                    var tes;
+                    test = encoded.buffer;
                     printHub(encoded);
                     io.println('');
                     console.log(input.join(""));
