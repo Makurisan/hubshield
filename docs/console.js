@@ -25,7 +25,7 @@ function setupHterm() {
     'use strict';
 
     var port;
-    var encoded = new ArrayBuffer;
+    var encoded = new Uint8Array;
     var data = {
         "cmd": "",
     };
@@ -51,7 +51,7 @@ function setupHterm() {
                 });
             }
         }
-
+         
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
@@ -61,8 +61,6 @@ function setupHterm() {
                     // test msgpack
                     data.cmd = input.join("");
                     encoded = msgpack.pack(data);
-                    var tes;
-                    test = encoded.buffer;
                     printHub(encoded);
                     io.println('');
                     console.log(input.join(""));
