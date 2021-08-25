@@ -44,9 +44,9 @@ function setupHterm() {
                 '\x1b[0m ');
         }
 
-        function printHub(str) {
+        function printHub(binary) {
             if (port !== undefined) {
-                port.send(textEncoder.encode(str)).catch(error => {
+                port.send(binary).catch(error => {
                     t.io.println('Send error: ' + error);
                 });
             }
@@ -56,7 +56,7 @@ function setupHterm() {
             switch (str) {
                 case '\r':
                     // print the length in front of the string max: 0xFF
-                    input.unshift(String.fromCharCode(input.length));
+                    //input.unshift(String.fromCharCode(input.length));
 
                     // test msgpack
                     data.cmd = input.join("");
