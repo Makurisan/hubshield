@@ -415,6 +415,9 @@ function decode() { // @return Mix:
 // inner - byteArray To ByteString
 function byteArrayToByteString(byteArray) { // @param ByteArray
                                             // @return String
+    // set the length in front of the array
+    byteArray.unshift(String.fromCharCode(byteArray.length));
+
     // http://d.hatena.ne.jp/uupaa/20101128
     try {
         return _toString.apply(this, byteArray); // toString

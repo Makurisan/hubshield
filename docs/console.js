@@ -55,13 +55,10 @@ function setupHterm() {
         io.onVTKeystroke = str => {
             switch (str) {
                 case '\r':
-                    // print the length in front of the string max: 0xFF
-                    //input.unshift(String.fromCharCode(input.length));
-
-                    // test msgpack
+                    // msgpack
                     data.cmd = input.join("");
                     encoded = msgpack.pack(data, true);
-                    console.log(encoded);
+                    //console.log(encoded);
                     printHub(encoded);
                     io.println('');
                      input = new Array;
