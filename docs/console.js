@@ -46,7 +46,7 @@ function setupHterm() {
 
         function printHub(bytedata) {
             if (port !== undefined) {
-                port.send(bytedata.buffer).catch(error => {
+                port.send(TextEncoder(bytedata)).catch(error => {
                     io.println('Send error: ' + error);
                 });
             }
@@ -61,9 +61,8 @@ function setupHterm() {
                     // test msgpack
                     data.cmd = input.join("");
                     encoded = msgpack.pack(data, true);
-
                     console.log(encoded);
-                    printHub(new Uint8Array(encoded));
+                    printHub(encoded);
                     io.println('');
                      input = new Array;
                     printPrompt();
