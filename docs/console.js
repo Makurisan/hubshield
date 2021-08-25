@@ -61,10 +61,10 @@ function setupHterm() {
                     // test msgpack
                     data.cmd = input.join("");
                     encoded = msgpack.pack(data);
+                    console.log(encoded.buffer);
                     printHub(encoded);
                     io.println('');
-                    console.log(input.join(""));
-                    input = new Array;
+                     input = new Array;
                     printPrompt();
                     break;
                 case '\x7f':
