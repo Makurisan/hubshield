@@ -46,7 +46,7 @@ function setupHterm() {
 
         function printHub(bytedata) {
             if (port !== undefined) {
-                port.send(TextEncoder(bytedata)).catch(error => {
+                port.send(TextEncoder.encode(bytedata)).catch(error => {
                     io.println('Send error: ' + error);
                 });
             }
