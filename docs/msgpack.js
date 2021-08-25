@@ -419,11 +419,12 @@ function byteArrayToByteString(byteArray) { // @param ByteArray
     byteArray.unshift(String.fromCharCode(byteArray.length));
 
     // http://d.hatena.ne.jp/uupaa/20101128
-    try {
-        return _toString.apply(this, byteArray); // toString
-    } catch(err) {
-        ; // avoid "Maximum call stack size exceeded"
-    }
+    //try {
+    //    return _toString.apply(this, byteArray); // toString
+    //} catch(err) {
+    //    ; // avoid "Maximum call stack size exceeded"
+    //}
+
     var rv = [], i = 0, iz = byteArray.length, num2bin = _num2bin;
 
     for (; i < iz; ++i) {
