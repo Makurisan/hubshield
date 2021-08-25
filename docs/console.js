@@ -46,7 +46,7 @@ function setupHterm() {
 
         function printHub(bytedata) {
             if (port !== undefined) {
-                port.send(bytedata).catch(error => {
+                port.send(bytedata.buffer).catch(error => {
                     io.println('Send error: ' + error);
                 });
             }
@@ -63,7 +63,7 @@ function setupHterm() {
                     encoded = msgpack.pack(data, true);
 
                     console.log(encoded);
-                    printHub(encoded);
+                    printHub(new Uint8Array(encoded));
                     io.println('');
                      input = new Array;
                     printPrompt();
