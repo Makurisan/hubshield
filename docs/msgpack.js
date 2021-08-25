@@ -416,11 +416,11 @@ function decode() { // @return Mix:
 function byteArrayToByteString(byteArray) { // @param ByteArray
                                             // @return String
     // http://d.hatena.ne.jp/uupaa/20101128
-    //try {
-    //    return _toString.apply(this, byteArray); // toString
-    //} catch(err) {
-    //    ; // avoid "Maximum call stack size exceeded"
-    //}
+    try {
+        return _toString.apply(this, byteArray); // toString
+    } catch(err) {
+        ; // avoid "Maximum call stack size exceeded"
+    }
 
     var rv = [], i = 0, iz = byteArray.length, num2bin = _num2bin;
 
@@ -429,7 +429,7 @@ function byteArrayToByteString(byteArray) { // @param ByteArray
     }
 
     // set the length in front of the array
-    rv.unshift(String.fromCharCode(rv.length));
+    //rv.unshift(String.fromCharCode(rv.length));
 
     return rv.join("");
 }
