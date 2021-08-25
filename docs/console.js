@@ -25,7 +25,7 @@ function setupHterm() {
     'use strict';
 
     var port;
-    var encoded;
+    var encoded = new Uint8Array;
     var data = {
         "cmd": "",
     };
@@ -44,9 +44,9 @@ function setupHterm() {
                 '\x1b[0m ');
         }
 
-        function printHub(binary) {
+        function printHub(bytedata) {
             if (port !== undefined) {
-                port.send(binary).catch(error => {
+                port.send(bytedata).catch(error => {
                     t.io.println('Send error: ' + error);
                 });
             }
