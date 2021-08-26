@@ -430,7 +430,6 @@ function byteArrayToByteString(byteArray) { // @param ByteArray
 
     // set the length in front of the array
     //rv.unshift(String.fromCharCode(rv.length));
-
     return rv.join("");
 }
 

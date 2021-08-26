@@ -724,7 +724,6 @@ static int vusb_probe(struct spi_device *spi)
     return rc;
   }
 
-
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
     sizeof(*udc->transfer), GFP_KERNEL);
   if (!udc->transfer)
@@ -825,6 +824,8 @@ static int vusb_probe(struct spi_device *spi)
   wake_up_process(udc->thread_service);
 
   UDCVDBG(udc, "Succesfully initialized vusb.\n");
+
+  vusb_mpack_buffer(udc, 2, udc->transfer, 512);
 
 	return 0;
 err:
