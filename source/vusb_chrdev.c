@@ -54,9 +54,9 @@ typedef struct vusb_send {
   uint8_t length;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = {
-    { "r",   /*cmd*/ VUSB_REG_RESET,       "REG_RESET",   /*port*/ 0, 1},
-    { "a",   /*cmd*/ VUSB_REG_HWATTACH,    "REG_HWATTACH",/*port*/ 0, 1},
-    { "d",   /*cmd*/ VUSB_REG_HWDETACH,    "REG_HWDETACH",/*port*/ 1, 1},
+    { "r",   /*cmd*/ VUSB_REG_RESET,      "REG_RESET",   /*port*/ 0, 1},
+    { "a",   /*cmd*/ VUSB_REG_HWATTACH,   "REG_HWATTACH",/*port*/ 0, 1},
+    { "d",   /*cmd*/ VUSB_REG_HWDETACH,   "REG_HWDETACH",/*port*/ 1, 1},
     { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",  /*port*/ 0, 2},
     { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",  /*port*/ 0, 2},
    // debug 
