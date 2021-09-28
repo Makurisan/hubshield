@@ -33,6 +33,7 @@ int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   mpack_reader_t reader;
   mpack_tree_t  tree = { 0 };
   size_t _length = 12;
+  tree;  
 
 #define OCTOPUS_MAX_SEND_ELEMENTS 5
 

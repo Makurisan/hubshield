@@ -270,7 +270,7 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 	////spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-void vusb_handle_setup(struct vusb_udc *udc, struct usb_ctrlrequest setup)
+void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setup)
 {
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
@@ -292,8 +292,10 @@ void vusb_handle_setup(struct vusb_udc *udc, struct usb_ctrlrequest setup)
 				USB_TYPE_STANDARD | USB_RECIP_DEVICE)) {
 			break;
 		}
-		//spi_rd8_ack(udc, VUSB_REG_FNADDR, 1);
-		UDCVDBG(udc,  "Assigned Address=%d\n", udc->setup.wValue);
+    udc->spitransfer[0] = REG_PIPIRQ4;
+    *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
+    vusb_write_buffer(udc, VUSB_REG_USB_SET_ADDRESS, udc->spitransfer, sizeof(u8) + sizeof(u32));
+		UDCVDBG(udc, "Assigned Address=%d\n", udc->setup.wValue);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
@@ -447,29 +449,35 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
-  u32 pipeirq = bswap32(udc->irq_map.PIPIRQ) & bswap32(udc->irq_map.PIPIEN);
+  // write with network byte order, big endian
+  udc->irq_map.PIPIEN = htonl(udc->irq_map.PIPIEN);
+  udc->irq_map.PIPIRQ = htonl(udc->irq_map.PIPIRQ);
+  u32 pipeirq = udc->irq_map.PIPIEN & udc->irq_map.PIPIRQ;
 
   // clear only if we have one to do
   if((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
     clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
   }
 
-  // check the first bit set
+  // check if a bit is set
   if(hweight32(pipeirq)) {
-    UDCVDBG(udc, "USB-Pipe bitpos: %x index: %x\n", pipeirq, pipeirq>>1);
+    UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
     udc->spitransfer[0] = REG_PIPIRQ4;
-    *(u32*)&udc->spitransfer[1] = pipeirq;
-    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 5); // u32 + u8
-    //udc->irq_map.PIPIRQ &= bswap32((u32)~BIT(_bf_ffsl(pipeirq)));
-    udc->irq_map.PIPIRQ = 0;
-     //read the setup data
+    u8 irq = _bf_ffsl(pipeirq);
+    // clear one mcu irq bit
+    *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
+    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32)); 
+    //read the setup data
     udc->spitransfer[0] = REG_PIPIRQ4;
-    *(u32*)&udc->spitransfer[1] = BIT(_bf_ffsl(pipeirq));
+    *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
     if (vusb_read_buffer(udc, VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 8)) {
+      UDCVDBG(udc, "USB-Pipe setup get index: %x\n", irq);
       //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8 + VUSB_SPI_HEADER, PRINTF_READ);
       struct usb_ctrlrequest setup;
       memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER, sizeof(struct usb_ctrlrequest));
-      vusb_handle_setup(udc, setup);
+      vusb_handle_setup(udc, irq, setup);
+      // clear the irq we just processed
+      udc->irq_map.PIPIRQ &= ~irq;
     }
     else
       UDCVDBG(udc, "--> error reading setup data\n");

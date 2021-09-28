@@ -10,6 +10,23 @@
  *                               *
  *********************************/
 
+enum vusb_req_code {
+  VUSB_REQ_GET_STATUS = 0,
+  VUSB_REQ_CLEAR_FTR = 1,
+  VUSB_REQ_GET_STATE = 2,
+  VUSB_REQ_SET_FTR = 3,
+  VUSB_REQ_SET_ADDRESS = 5,
+  VUSB_REQ_GET_DESC = 6,
+  VUSB_REQ_SET_DESC = 7,
+  VUSB_REQ_GET_CONFIG = 8,
+  VUSB_REQ_SET_CONFIG = 9,
+  VUSB_REQ_GET_INTERFACE = 10,
+  VUSB_REQ_SET_INTERFACE = 11,
+  VUSB_REQ_SYNCH_FRAME = 12,
+  VUSB_REQ_SET_SEL = 48,
+  VUSB_REQ_ISOCH_DELAY = 49
+};
+
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
 #define VUSB_SPI_HEADER		        (1 <<  2)
@@ -27,6 +44,19 @@
 #define VUSB_REG_SET        0x06
 #define VUSB_REG_PORT_ATTACH  0x07
 #define VUSB_REG_PORT_DETACH  0x08
+
+#define VUSB_REG_USB				0x10
+#define VUSB_REG_USB_GET_STATUS   	(VUSB_REG_USB + VUSB_REQ_GET_STATUS   )
+#define VUSB_REG_USB_CLEAR_FTR    	(VUSB_REG_USB + VUSB_REQ_CLEAR_FTR    )
+#define VUSB_REG_USB_GET_STATE    	(VUSB_REG_USB + VUSB_REQ_GET_STATE    )
+#define VUSB_REG_USB_SET_FTR      	(VUSB_REG_USB + VUSB_REQ_SET_FTR      )
+#define VUSB_REG_USB_SET_ADDRESS  	(VUSB_REG_USB + VUSB_REQ_SET_ADDRESS  )
+#define VUSB_REG_USB_GET_DESC     	(VUSB_REG_USB + VUSB_REQ_GET_DESC     )
+#define VUSB_REG_USB_SET_DESC     	(VUSB_REG_USB + VUSB_REQ_SET_DESC     )
+#define VUSB_REG_USB_GET_CONFIG   	(VUSB_REG_USB + VUSB_REQ_GET_CONFIG   )
+#define VUSB_REG_USB_SET_CONFIG   	(VUSB_REG_USB + VUSB_REQ_SET_CONFIG   )
+#define VUSB_REG_USB_GET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_GET_INTERFACE)
+#define VUSB_REG_USB_SET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_SET_INTERFACE)
 
 #define VUSB_REG_PRINTF		  0x30
 #define VUSB_REG_PRINTF1	  0x31
@@ -102,6 +132,7 @@
 #define REG_PRTIEN	6
 
 #define REG_PIPIRQ4	7
+#define REG_PIPE_IRQ REG_PIPIRQ4 // all 32 bits
 #define REG_PIPIRQ3	8
 #define REG_PIPIRQ2	9
 #define REG_PIPIRQ1	10
@@ -279,7 +310,7 @@ void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
-void vusb_handle_setup(struct vusb_udc* udc, struct usb_ctrlrequest setup);
+void vusb_handle_setup(struct vusb_udc* udc, u8 irq, struct usb_ctrlrequest setup);
 
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 
