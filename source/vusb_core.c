@@ -308,13 +308,13 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 		break;
 	}
 
-return;
+	if (udc->driver->setup(&udc->gadget, &setup) < 0) {
+  	//	/* Stall EP0 */
+    UDCVDBG(udc, "Stall EP0 %x\n", udc->gadget);
+    //	//spi_wr8(udc, VUSB_REG_EPSTALLS,
+	  //	//STLEP0IN | STLEP0OUT | STLSTAT);
+	}
 
-	//if (udc->driver->setup(&udc->gadget, &setup) < 0) {
-	//	/* Stall EP0 */
-	//	//spi_wr8(udc, VUSB_REG_EPSTALLS,
-	//	//STLEP0IN | STLEP0OUT | STLSTAT);
-	//}
 }
 
 void vusb_req_done(struct vusb_req *req, int status)
@@ -356,6 +356,7 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 		done = 1;
 		goto xfer_done;
 	}
+  pr_hex_mark(buf, length, PRINTF_READ);
 
 	done = 0;
 	if (in) {
@@ -589,7 +590,7 @@ static int vusb_thread(void *dev_id)
 			goto loop;
 		}
 
-		//vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
+		vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
 
 		//for (i = 1; i < VUSB_MAX_EPS; i++) {
 		//	struct vusb_ep *ep = &udc->ep[i];
