@@ -8,9 +8,9 @@
 
 #include <linux/delay.h>
 #include <linux/device.h>
+#include <linux/module.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
-#include <linux/module.h>
 #include <linux/bitfield.h>
 #include <linux/of_address.h>
 #include <linux/of_device.h>
@@ -285,7 +285,8 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 				(USB_DIR_IN | USB_TYPE_STANDARD)) {
 			break;
 		}
-		return vusb_getstatus(udc);
+    UDCVDBG(udc, "Get status %x\n", udc->setup.wValue);
+    return vusb_getstatus(udc);
 	case USB_REQ_SET_ADDRESS:
 		/* Status phase from udc */
 		if (udc->setup.bRequestType != (USB_DIR_OUT |
@@ -308,6 +309,8 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 		break;
 	}
 
+  UDCVDBG(udc, "Setup gadget %x\n", udc->gadget);
+return;
 	if (udc->driver->setup(&udc->gadget, &setup) < 0) {
   	//	/* Stall EP0 */
     UDCVDBG(udc, "Stall EP0 %x\n", udc->gadget);
@@ -820,10 +823,6 @@ static int vusb_probe(struct spi_device *spi)
 
   // clear the bit that the thread is waiting for something
   clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
-
-  ////udc->thread_service = kthread_run(vusb_thread, udc, "vusb-thread");
-  ////if (IS_ERR(udc->thread_service))
-  ////  return PTR_ERR(udc->thread_service);
 
   udc->thread_service = kthread_create(vusb_thread, udc,
     "vusb-thread");
