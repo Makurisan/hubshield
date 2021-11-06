@@ -47,11 +47,11 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 
   wake_up_process(udc->thread_service);
 
-  dev_dbg(udc->dev, "%sStall %s\n", stall ? "" : "Un", ep->name);
+  dev_dbg(udc->dev, "vusb_ep_set_halt, %sStall %s\n", stall ? "" : "Un", ep->name);
   return 0;
 }
 
-static int __vusb_ep_enable(struct vusb_ep* ep,
+static int _vusb_ep_enable(struct vusb_ep* ep,
   const struct usb_endpoint_descriptor* desc)
 {
   unsigned int maxp = usb_endpoint_maxp(desc);
@@ -65,6 +65,8 @@ static int __vusb_ep_enable(struct vusb_ep* ep,
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
+  dev_info(&ep->udc->spi->dev, "vusb_ep_enable maxp:%x\n", maxp);
+
   return 0;
 }
 
@@ -74,7 +76,7 @@ static int vusb_ep_enable(struct usb_ep* _ep,
   struct vusb_ep* ep = to_vusb_ep(_ep);
   struct vusb_udc* udc = ep->udc;
 
-  __vusb_ep_enable(ep, desc);
+  _vusb_ep_enable(ep, desc);
 
   wake_up_process(udc->thread_service);
 
@@ -85,6 +87,8 @@ void vusb_nuke(struct vusb_ep* ep, int status)
 {
   struct vusb_req* req, * r;
   unsigned long flags;
+
+  dev_info(&ep->udc->spi->dev, "vusb_nuke\n");
 
   spin_lock_irqsave(&ep->lock, flags);
 
@@ -99,7 +103,7 @@ void vusb_nuke(struct vusb_ep* ep, int status)
   spin_unlock_irqrestore(&ep->lock, flags);
 }
 
-static void __vusb_ep_disable(struct vusb_ep* ep)
+static void _vusb_ep_disable(struct vusb_ep* ep)
 {
   struct vusb_udc* udc = ep->udc;
   unsigned long flags;
@@ -113,7 +117,7 @@ static void __vusb_ep_disable(struct vusb_ep* ep)
 
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  dev_dbg(udc->dev, "Disabled %s\n", ep->name);
+  dev_dbg(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
 }
 
 static int vusb_ep_disable(struct usb_ep* _ep)
@@ -123,7 +127,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
 
   vusb_nuke(ep, -ESHUTDOWN);
 
-  __vusb_ep_disable(ep);
+  _vusb_ep_disable(ep);
 
   wake_up_process(udc->thread_service);
 
@@ -141,6 +145,8 @@ static struct usb_request* vusb_alloc_request(struct usb_ep* _ep,
     return NULL;
 
   req->ep = ep;
+
+  dev_dbg(ep->udc->dev, "vusb_alloc_request %s\n", ep->name);
 
   return &req->usb_req;
 }
@@ -166,6 +172,8 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req,
   spin_unlock_irqrestore(&ep->lock, flags);
 
   wake_up_process(udc->thread_service);
+  dev_dbg(udc->dev, "vusb_ep_queue %s\n", ep->name);
+
   return 0;
 }
 
@@ -254,7 +262,6 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->ep_usb.caps.type_int = false;
     ep->ep_usb.caps.type_bulk = true;
 
-    list_add_tail(&ep->ep_usb.ep_list,
-      &udc->gadget.ep_list);
+    list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
   }
 }
