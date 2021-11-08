@@ -65,8 +65,6 @@ static int _vusb_ep_enable(struct vusb_ep* ep,
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  dev_info(&ep->udc->spi->dev, "vusb_ep_enable maxp:%x\n", maxp);
-
   return 0;
 }
 
@@ -77,6 +75,7 @@ static int vusb_ep_enable(struct usb_ep* _ep,
   struct vusb_udc* udc = ep->udc;
 
   _vusb_ep_enable(ep, desc);
+  dev_info(&ep->udc->spi->dev, "vusb_ep_enable ep:%s\n", _ep->name);
 
   wake_up_process(udc->thread_service);
 
@@ -88,7 +87,7 @@ void vusb_nuke(struct vusb_ep* ep, int status)
   struct vusb_req* req, * r;
   unsigned long flags;
 
-  dev_info(&ep->udc->spi->dev, "vusb_nuke\n");
+  dev_info(&ep->udc->spi->dev, "vusb_nuke ep:%s\n", ep->name);
 
   spin_lock_irqsave(&ep->lock, flags);
 
@@ -130,6 +129,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   _vusb_ep_disable(ep);
 
   wake_up_process(udc->thread_service);
+
 
   return 0;
 }
@@ -250,13 +250,13 @@ void vusb_eps_init(struct vusb_udc* udc)
     if (idx == 1) { /* EP1 is OUT */
       ep->ep_usb.caps.dir_in = false;
       ep->ep_usb.caps.dir_out = true;
-      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep1-bulk-out");
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep1-out");
     }
     else { /* EP2 & EP3 are IN */
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = false;
       snprintf(ep->name, VUSB_EPNAME_SIZE,
-        "ep%d-bulk-in", idx);
+        "ep%d-in", idx);
     }
     ep->ep_usb.caps.type_iso = false;
     ep->ep_usb.caps.type_int = false;

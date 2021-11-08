@@ -44,6 +44,7 @@ enum vusb_req_code {
 #define VUSB_REG_SET        0x06
 #define VUSB_REG_PORT_ATTACH  0x07
 #define VUSB_REG_PORT_DETACH  0x08
+#define VUSB_REG_ACK					0x09
 
 #define VUSB_REG_USB				0x10
 #define VUSB_REG_USB_GET_STATUS   	(VUSB_REG_USB + VUSB_REQ_GET_STATUS   )
