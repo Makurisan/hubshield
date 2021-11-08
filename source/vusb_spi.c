@@ -96,22 +96,22 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
           }
           else {
             //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
-            //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+            UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
             return -1;
           }
         }
         else {
-          //UDCVDBG(udc, "mcu read spi_sync error!\n");
+          UDCVDBG(udc, "mcu read spi_sync error!\n");
           return -2;
         }
       }
       else {
-        //UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
+        UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
         return -3;
       }
     }
     else {
-      //UDCVDBG(udc, "mcu read command header error: %02x\n", cmd->length);
+      UDCVDBG(udc, "mcu read command header error: %02x\n", cmd->length);
       return -4;
     }
   }
@@ -125,10 +125,11 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   int rc1=0, rc2=0, rc3=0;
   mutex_lock_interruptible(&udc->spi_read_mutex);
 #ifdef TRY_FAILED
-  if (0 == (rc1 = _vusb_read_buffer(udc, reg, buffer, length))) {
-    if (0 == (rc2 = _vusb_read_buffer(udc, reg, buffer, length))) {
+  if (0 >= (rc1 = _vusb_read_buffer(udc, reg, buffer, length))) {
+    UDCVDBG(udc, "mcu first read error: %d, %d, trying the last time...\n", rc1);
+    if (0 >= (rc2 = _vusb_read_buffer(udc, reg, buffer, length))) {
       UDCVDBG(udc, "mcu second read error: %d, %d, trying the last time...\n", rc1, rc2);
-      if (0 == (rc3 = _vusb_read_buffer(udc, reg, buffer, length))) {
+      if (0 >= (rc3 = _vusb_read_buffer(udc, reg, buffer, length))) {
         UDCVDBG(udc, "mcu read error: %d, %d, %d, tried three times without success!\n", rc1, rc2, rc3);
         mutex_unlock(&udc->spi_read_mutex);
         return rc3;
@@ -184,7 +185,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {
-      //UDCVDBG(udc, "Mcu wait event error for spi read\n");
+      UDCVDBG(udc, "Mcu wait event error for spi read\n");
       memset(udc->spitransfer + VUSB_SPI_HEADER, 0, length );
       rc = -6;
     }
