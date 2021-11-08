@@ -294,7 +294,7 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 		}
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-    vusb_write_buffer(udc, VUSB_REG_USB_SET_ADDRESS, udc->spitransfer, sizeof(u8) + sizeof(u32));
+    vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
 		UDCVDBG(udc, "Assigned Address=%d, irq:%d\n", udc->setup.wValue, irq);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
@@ -309,9 +309,9 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 	}
 
 // test the write of the descriptor
-  udc->spitransfer[0] = REG_PIPIRQ4;
-  *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-  vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+  //udc->spitransfer[0] = REG_PIPIRQ4;
+  //*(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
+  //vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
   //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
 	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
@@ -335,14 +335,20 @@ void vusb_req_done(struct vusb_req *req, int status)
   //  ep->ep_usb.name, req, status);
   UDCVDBG(udc, "---> vusb_req_done: %s\n", &ep->name);
 
+  udc->spitransfer[0] = REG_PIPIRQ4;
+  *(u32*)&udc->spitransfer[1] = htonl(BIT(2)); // take one bit
+  vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+
 	if (req->usb_req.status == -EINPROGRESS)
 		req->usb_req.status = status;
-	else
-		status = req->usb_req.status;
+  else {
+    status = req->usb_req.status;
+  }
 
-	if (status && status != -ESHUTDOWN)
-		UDCVDBG(udc, "%s done %p, status %d\n",
-			ep->ep_usb.name, req, status);
+  if (status && status != -ESHUTDOWN) {
+    UDCVDBG(udc, "%s done %p, status %d\n",
+      ep->ep_usb.name, req, status);
+  }
 
 	if (req->usb_req.complete)
 		req->usb_req.complete(&ep->ep_usb, &req->usb_req);
@@ -403,9 +409,6 @@ xfer_done:
 
 		//if (ep_id == 0)
 		//	spi_ack_ctrl(udc);
-    //udc->spitransfer[0] = REG_PIPIRQ4;
-    //*(u32*)&udc->spitransfer[1] = htonl(BIT(7)); // take one bit
-    //vusb_write_buffer(udc, VUSB_REG_USB_SET_ADDRESS, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
 		vusb_req_done(req, 0);
 	}
