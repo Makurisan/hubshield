@@ -64,6 +64,24 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   spi_message_init(&m);
   memset(&tr, 0, sizeof(tr));
 
+#ifndef READ_ONE 
+  tr.rx_buf = buffer;
+  tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
+  spi_message_add_tail(&tr, &m);
+  // read the four bytes header
+  if (!spi_sync(spi, &m))
+  {
+    spi_cmd_t* cmd = (spi_cmd_t*)buffer;
+    if (crc8(udc->crc_table, cmd->data, cmd->length, 0) == cmd->crc8) {
+      //pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+      //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+      // set the reg back to the header, the other fields are correct  
+      return cmd->length;
+    }
+    return -1;
+  }
+  return -5;
+#else
   tr.rx_buf = buffer;
   tr.len = VUSB_SPI_HEADER;
   spi_message_add_tail(&tr, &m);
@@ -107,6 +125,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       }
       else {
         UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
+        pr_hex_mark(udc->spitransfer, VUSB_SPI_HEADER, PRINTF_READ);
         return -3;
       }
     }
@@ -115,7 +134,8 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       return -4;
     }
   }
-  return -5;
+  return -5; 
+#endif
 }
 
 #define TRY_FAILED
@@ -179,7 +199,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
     wakeup_flag = 0;
     rc = wait_event_interruptible_timeout(udc->spi_read_queue, wakeup_flag, WAIT_UNTIL_GPIO_ASSERTED);
     wait_time = ktime_to_us(wait_endtime - wait_starttime);
-    if (wait_time > 4000) {
+    if (wait_time > 8000) {
       UDCVDBG(udc, "Mcu wait time(us): %d\n", wait_time);
     }
     if (rc) {

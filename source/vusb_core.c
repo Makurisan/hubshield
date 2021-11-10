@@ -455,6 +455,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   }
 
   // read all mcu IRQs  
+  memset(udc->spitransfer, 0, REG_IRQ_ELEMENTS);
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false; 
   }
@@ -478,7 +479,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
 
 // debug
     if (pipeirq == BIT(3)) { // _PIPIRQ3
-      UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
+      //UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
       vusb_do_data(udc, 2, 1);
 // test
       //udc->spitransfer[0] = REG_PIPEIRQ;

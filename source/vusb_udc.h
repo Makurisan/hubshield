@@ -187,7 +187,7 @@ enum vusb_req_code {
 #define VUSB_MCU_IRQ_GPIO 0
 
 // register data map
-#pragma pack(8)
+#pragma pack(1)
 typedef struct vusb_req_map {
 // usb
   u8 USBIRQ; u8 USBIEN;
@@ -217,7 +217,7 @@ struct vusb_ep {
   int id;
 };
 
-#pragma pack(8)
+#pragma pack(1)
 typedef union {
   struct {
     uint8_t reg : 6;  /* Register R0 through ... 64 */
@@ -228,7 +228,7 @@ typedef union {
 } spi_reg_t;
 #pragma pack()
 
-#pragma pack(8)
+#pragma pack(1)
 typedef struct vusb_spi_cmd {
   spi_reg_t reg;
   u8 crc8;
