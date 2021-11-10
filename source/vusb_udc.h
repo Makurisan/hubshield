@@ -75,6 +75,7 @@ enum vusb_req_code {
 // pipe register
 #define VUSB_REG_PIPE_SETUP_GET 0x15
 #define VUSB_REG_DEBUG          0x16
+#define VUSB_REG_PIPE_GET_EP    0x17
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
@@ -132,7 +133,7 @@ enum vusb_req_code {
 #define REG_PRTIEN	6
 
 #define REG_PIPIRQ4	7
-#define REG_PIPE_IRQ REG_PIPIRQ4 // all 32 bits
+#define REG_PIPEIRQ REG_PIPIRQ4 // all 32 bits
 #define REG_PIPIRQ3	8
 #define REG_PIPIRQ2	9
 #define REG_PIPIRQ1	10

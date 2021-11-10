@@ -134,8 +134,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   return 0;
 }
 
-static struct usb_request* vusb_alloc_request(struct usb_ep* _ep,
-  gfp_t gfp_flags)
+static struct usb_request* vusb_alloc_request(struct usb_ep* _ep, gfp_t gfp_flags)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
   struct vusb_req* req;
@@ -156,8 +155,7 @@ static void vusb_free_request(struct usb_ep* _ep, struct usb_request* _req)
   kfree(to_vusb_req(_req));
 }
 
-static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req,
-  gfp_t ignored)
+static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ignored)
 {
   struct vusb_req* req = to_vusb_req(_req);
   struct vusb_ep* ep = to_vusb_ep(_ep);
@@ -247,12 +245,12 @@ void vusb_eps_init(struct vusb_udc* udc)
       continue;
     }
 
-    if (idx == 1) { /* EP1 is OUT */
+    if (idx == 1) { /* EP1 is IN */
       ep->ep_usb.caps.dir_in = false;
       ep->ep_usb.caps.dir_out = true;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep1-out");
     }
-    else { /* EP2 & EP3 are IN */
+    else { /* EP2 & EP3 are OUT */
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = false;
       snprintf(ep->name, VUSB_EPNAME_SIZE,
