@@ -399,8 +399,6 @@ xfer_done:
 		list_del_init(&req->queue);
 		spin_unlock_irqrestore(&ep->lock, flags);
 
-		//if (ep_id == 0)
-		//	spi_ack_ctrl(udc);
     if (ep_id == 0) {
       udc->spitransfer[0] = REG_PIPIRQ4;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(2)); // take one bit
@@ -477,25 +475,35 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   // check if a bit is set
   if(hweight32(pipeirq)) {
     //UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
-    udc->spitransfer[0] = REG_PIPEIRQ;
-    u8 irqs = _bf_ffsl(pipeirq);
-    // clear one mcu irq bit
-    *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32)); 
 
 // debug
     if (pipeirq == BIT(3)) { // _PIPIRQ3
-      //UDCVDBG(udc, "---> USB-Pipe setup get index: %x\n", irqs);
+      UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
       vusb_do_data(udc, 2, 1);
 // test
+      //udc->spitransfer[0] = REG_PIPEIRQ;
+      //*(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
+      //vusb_write_buffer(udc, VUSB_REG_PIPE_GET_EP, udc->spitransfer, sizeof(u8) + sizeof(u32));
+
+      // clear irq
+      u8 irqs = _bf_ffsl(pipeirq);
       udc->spitransfer[0] = REG_PIPEIRQ;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      //vusb_write_buffer(udc, VUSB_REG_PIPE_GET_EP, udc->spitransfer, sizeof(u8) + sizeof(u32));
+      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
+      
       // clear the irq we just processed
       udc->irq_map.PIPIRQ &= ~irqs;
+      return true;
+
     }
     else
     {
+      // clear one mcu irq bit
+      udc->spitransfer[0] = REG_PIPEIRQ;
+      u8 irqs = _bf_ffsl(pipeirq);
+      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
+      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
+
       //read the setup data
       udc->spitransfer[0] = REG_PIPEIRQ;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit

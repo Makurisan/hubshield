@@ -96,7 +96,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
           }
           else {
             //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
-            UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+            //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
             return -1;
           }
         }
@@ -126,7 +126,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   mutex_lock_interruptible(&udc->spi_read_mutex);
 #ifdef TRY_FAILED
   if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
-    UDCVDBG(udc, "mcu first read error: %d, %d\n", rc1);
+    //UDCVDBG(udc, "mcu first read error: %d, %d\n", rc1);
     if ((rc2 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
       UDCVDBG(udc, "mcu second read error: %d, %d, trying the last time...\n", rc1, rc2);
       if ((rc3 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
