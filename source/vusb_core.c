@@ -329,7 +329,7 @@ void vusb_req_done(struct vusb_req *req, int status)
 
   //UDCVDBG(udc, "%s reqdone %p, status %d\n",
   //  ep->ep_usb.name, req, status);
-  UDCVDBG(udc, "---> vusb_req_done: %s\n", &ep->name);
+  //UDCVDBG(udc, "---> vusb_req_done: %s\n", &ep->name);
 
 	if (req->usb_req.status == -EINPROGRESS)
 		req->usb_req.status = status;
@@ -373,6 +373,10 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 	if (in) {
 		prefetch(buf);
     pr_hex_mark(buf, length, PRINTF_READ);
+
+    udc->spitransfer[0] = REG_PIPEIRQ;
+    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, buf, length);
+
     //spi_wr_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
 		//spi_wr8(udc, VUSB_REG_EP0BC + ep_id, length);
 		if (length <= psz)
@@ -505,10 +509,11 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     if (pipeirq == BIT(3)) { // _PIPIRQ3
       //UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
       vusb_do_data(udc, 2, 1);
-// test
+
+      // test
       //udc->spitransfer[0] = REG_PIPEIRQ;
       //*(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      //vusb_write_buffer(udc, VUSB_REG_PIPE_GET_EP, udc->spitransfer, sizeof(u8) + sizeof(u32));
+      //vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
       // clear irq
       u8 irqs = _bf_ffsl(pipeirq);

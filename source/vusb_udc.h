@@ -74,9 +74,9 @@ enum vusb_req_code {
 // port register							 
 
 // pipe register
-#define VUSB_REG_PIPE_SETUP_GET 0x15
-#define VUSB_REG_DEBUG          0x16
-#define VUSB_REG_PIPE_GET_EP    0x17
+#define VUSB_REG_PIPE_SETUP_GET   0x15
+#define VUSB_REG_DEBUG            0x16
+#define VUSB_REG_PIPE_WRITE_DATA  0x17
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
@@ -99,6 +99,7 @@ enum vusb_req_code {
 #define PRINTF_WRITE 1
 #define PRINTF_READ  2
 #define PRINTF_ERROR 4
+#define PRINTF_READX 5
 
 #define bswap32(_value) __builtin_bswap32(_value)
 #define _bf_ffsl(x) (__builtin_ffsl (x) - 1)
