@@ -64,7 +64,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   spi_message_init(&m);
   memset(&tr, 0, sizeof(tr));
 
-#ifndef READ_ONE 
+#ifdef READ_ONE 
   tr.rx_buf = buffer;
   tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
   spi_message_add_tail(&tr, &m);
@@ -139,14 +139,17 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
 }
 
 #define TRY_FAILED
+
 static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   int rc1=0, rc2=0, rc3=0;
   mutex_lock_interruptible(&udc->spi_read_mutex);
+
 #ifdef TRY_FAILED
   if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
     //UDCVDBG(udc, "mcu first read error: %d, %d\n", rc1);
+    pr_hex_mark(buffer, sizeof(u8) * 12, PRINTF_ERROR);
     if ((rc2 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
       UDCVDBG(udc, "mcu second read error: %d, %d, trying the last time...\n", rc1, rc2);
       if ((rc3 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
@@ -168,6 +171,10 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
   struct spi_transfer t;
   struct spi_message msg;
   int rc = -7;
+
+  u8 spibuffer[2];
+  spibuffer[0] = true;
+  //vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -210,6 +217,9 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
       rc = -6;
     }
   }
+  spibuffer[0] = false;
+  //vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+
   return rc;
 }
 
@@ -222,7 +232,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   spi_message_init(&msg);
 
   // header reg, length, crc
-  spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+  spi_cmd_t* cmd = (spi_cmd_t*)udc->spiwritebuffer;
 
   // overlapping copy and length automatically checked
   memmove(cmd->data, buffer, length);
@@ -233,7 +243,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   cmd->crc8 = crc8(udc->crc_table, cmd->data, length, 0);
   cmd->length = length;
 
-  t.tx_buf = udc->spitransfer;
+  t.tx_buf = udc->spiwritebuffer;
   t.len = cmd->length + VUSB_SPI_HEADER;
   t.delay_usecs = 0;
   t.cs_change_delay.unit = 0;

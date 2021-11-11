@@ -477,28 +477,8 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   if(hweight32(pipeirq)) {
     //UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
 
-// debug
-    if (pipeirq == BIT(3)) { // _PIPIRQ3
-      //UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
-      vusb_do_data(udc, 2, 1);
-// test
-      //udc->spitransfer[0] = REG_PIPEIRQ;
-      //*(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      //vusb_write_buffer(udc, VUSB_REG_PIPE_GET_EP, udc->spitransfer, sizeof(u8) + sizeof(u32));
-
-      // clear irq
-      u8 irqs = _bf_ffsl(pipeirq);
-      udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
-      
-      // clear the irq we just processed
-      udc->irq_map.PIPIRQ &= ~irqs;
-      return true;
-
-    }
-    else
-    {
+// we must check if we have CTRL interrupt 0 something
+    if (pipeirq != BIT(3)) { // 
       // clear one mcu irq bit
       udc->spitransfer[0] = REG_PIPEIRQ;
       u8 irqs = _bf_ffsl(pipeirq);
@@ -516,11 +496,30 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
         vusb_handle_setup(udc, irqs, setup);
         // clear the irq we just processed
         udc->irq_map.PIPIRQ &= ~irqs;
+        return true;
       }
       else
         UDCVDBG(udc, "--> error reading setup data\n");
     }
-    return true;
+// debug
+    if (pipeirq == BIT(3)) { // _PIPIRQ3
+      //UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
+      vusb_do_data(udc, 2, 1);
+// test
+      //udc->spitransfer[0] = REG_PIPEIRQ;
+      //*(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
+      //vusb_write_buffer(udc, VUSB_REG_PIPE_GET_EP, udc->spitransfer, sizeof(u8) + sizeof(u32));
+
+      // clear irq
+      u8 irqs = _bf_ffsl(pipeirq);
+      udc->spitransfer[0] = REG_PIPEIRQ;
+      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
+      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
+   
+      // clear the irq we just processed
+      udc->irq_map.PIPIRQ &= ~irqs;
+      return true;
+    }
   }
 
   if (usbirq & SRESIRQ) {
@@ -784,6 +783,14 @@ static int vusb_probe(struct spi_device *spi)
   udc->spitransfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
     sizeof(*udc->spitransfer), GFP_KERNEL);
   if (!udc->spitransfer)
+  {
+    dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
+    return -ENOMEM;
+  }
+
+  udc->spiwritebuffer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
+    sizeof(*udc->spiwritebuffer), GFP_KERNEL);
+  if (!udc->spiwritebuffer)
   {
     dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
     return -ENOMEM;

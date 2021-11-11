@@ -58,6 +58,7 @@ enum vusb_req_code {
 #define VUSB_REG_USB_GET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_GET_INTERFACE)
 #define VUSB_REG_USB_SET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_SET_INTERFACE)
 
+#define VUSB_REG_READ_LOCK  0x29
 #define VUSB_REG_PRINTF		  0x30
 #define VUSB_REG_PRINTF1	  0x31
 #define VUSB_REG_PRINTF2	  0x32
@@ -242,7 +243,8 @@ struct vusb_udc {
   /* SPI master */
   struct spi_device* spi;
   /* SPI transfer buffer */
-  u8* spitransfer;
+  u8* spitransfer; /*can be used*/
+  u8* spiwritebuffer; /*internal usage*/
   u8* transfer;
 
   /* MCU irq data */
