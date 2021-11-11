@@ -65,10 +65,7 @@ void pr_hex_mark(const char* mem, int count, int mark)
       switch (mark) {
       case PRINTF_READ:
         if (k == 1) {
-          if (length)
-            printk(KERN_INFO " r [%s\n", hexline); // print line to console
-          else
-            printk(KERN_ERR " r [%s mcu read error\n", hexline); // print line to console
+          printk(KERN_INFO " r [%s\n", hexline); // print line to console
         }
         else
           printk(KERN_INFO "   %s\n", hexline); // print line to console
