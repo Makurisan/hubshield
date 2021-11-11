@@ -141,6 +141,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
 #define TRY_FAILED
 
 static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
+
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   int rc1=0, rc2=0, rc3=0;
@@ -174,7 +175,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
 
   u8 spibuffer[2];
   spibuffer[0] = true;
-  //vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -207,23 +208,41 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
     rc = wait_event_interruptible_timeout(udc->spi_read_queue, wakeup_flag, WAIT_UNTIL_GPIO_ASSERTED);
     wait_time = ktime_to_us(wait_endtime - wait_starttime);
     if (wait_time > 8000) {
-      UDCVDBG(udc, "Mcu wait time(us): %d\n", wait_time);
+      UDCVDBG(udc, "Mcu wait time(us): %d, rc:%d\n", wait_time, rc);
     }
     if (rc) {
       rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
     } else {
-      UDCVDBG(udc, "Mcu wait event error for spi read\n");
+      //UDCVDBG(udc, "Mcu wait event error for spi read\n");
       memset(udc->spitransfer + VUSB_SPI_HEADER, 0, length );
       rc = -6;
     }
   }
   spibuffer[0] = false;
-  //vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
 
   return rc;
 }
 
+static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
+
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
+{
+  int rc;
+
+  u8 spibuffer[2];
+  spibuffer[0] = true;
+  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+
+  rc = _vusb_write_buffer(udc, reg, buffer, length);
+  
+  spibuffer[0] = false;
+  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+
+  return rc;
+}
+
+static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   struct spi_transfer t;
   struct spi_message msg;
@@ -256,6 +275,5 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   if (status) {
     UDCVDBG(udc, "--> Mcu spi write error: %d\n", status);
   }
-
   return !status;
 }
