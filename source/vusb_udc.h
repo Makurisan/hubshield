@@ -187,6 +187,7 @@ enum vusb_req_code {
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
 #define VUSB_MCU_IRQ_GPIO 0
+#define VUSB_MCU_EP_REQ      1
 
 // register data map
 #pragma pack(1)
@@ -212,6 +213,7 @@ struct vusb_ep {
   struct vusb_udc* udc;
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
+  int idx; // pipe index on MCU
   unsigned int maxpacket;
   spinlock_t lock;
   int halted;
@@ -306,7 +308,7 @@ struct vusb_udc {
 };
 
 int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env);
-void pr_hex_mark(const char* mem, int count, int mark);
+void pr_hex_mark(const char* mem, int count, int mark, const char* label);
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_eps_init(struct vusb_udc* udc);

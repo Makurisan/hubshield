@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * VUSB Device Controller driver for USB.
- *
+3d printing quadcopter *
  * Author: Manfred Kubica <ManfredKubica@web.de>
  *
  */
@@ -54,7 +54,7 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
 
 }
 
-static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
+static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length, u8 showpart)
 {
   struct spi_device* spi = udc->spi;
   struct spi_transfer	tr;
@@ -64,7 +64,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   spi_message_init(&m);
   memset(&tr, 0, sizeof(tr));
 
-#ifdef READ_ONE 
+#ifndef READ_ONE 
   tr.rx_buf = buffer;
   tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
   spi_message_add_tail(&tr, &m);
@@ -73,12 +73,17 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   {
     spi_cmd_t* cmd = (spi_cmd_t*)buffer;
     if (crc8(udc->crc_table, cmd->data, cmd->length, 0) == cmd->crc8) {
-      //pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
-      //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+      if (showpart)
+        pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "correct");
+      //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, NULL);
       // set the reg back to the header, the other fields are correct  
       return cmd->length;
     }
-    return -1;
+    else {
+      pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
+      //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
+      return -1;
+    }
   }
   return -5;
 #else
@@ -106,14 +111,15 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
         spi_message_add_tail(&tr, &m);
         if (!spi_sync(spi, &m)) {
           if (crc8(udc->crc_table, tr.rx_buf, cmd->length, 0) == cmd->crc8) {
-            //pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
-            //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+            if(showpart)
+              pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "correct");
+            //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, NULL);
             // set the reg back to the header, the other fields are correct  
             cmd->reg.val = cmd_reg;
             return cmd->length;
           }
           else {
-            //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ);
+            pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
             //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
             return -1;
           }
@@ -125,7 +131,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       }
       else {
         UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
-        pr_hex_mark(udc->spitransfer, VUSB_SPI_HEADER, PRINTF_READ);
+        pr_hex_mark(udc->spitransfer, VUSB_SPI_HEADER, PRINTF_READ, NULL);
         return -3;
       }
     }
@@ -140,7 +146,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
 
 #define TRY_FAILED
 
-static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
+static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length, u8 showpart);
 
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
@@ -148,13 +154,13 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   mutex_lock_interruptible(&udc->spi_read_mutex);
 
 #ifdef TRY_FAILED
-  if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
+  if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length, 0)) <= 0) {
     //UDCVDBG(udc, "mcu first read error: %d, %d\n", rc1);
-    pr_hex_mark(buffer, sizeof(u8) * 12, PRINTF_ERROR);
-    if ((rc2 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
-      UDCVDBG(udc, "mcu second read error: %d, %d, trying the last time...\n", rc1, rc2);
-      if ((rc3 = _vusb_read_buffer(udc, reg, buffer, length)) <= 0) {
-        UDCVDBG(udc, "mcu read error: %d, %d, %d, tried three times without success!\n", rc1, rc2, rc3);
+    pr_hex_mark(buffer, sizeof(u8) * 12, PRINTF_ERROR, NULL);
+    if ((rc2 = _vusb_read_buffer(udc, reg, buffer, length, 1)) <= 0) {
+      UDCVDBG(udc, "mcu second read error: %d, %d\n", rc1, rc2);
+      if ((rc3 = _vusb_read_buffer(udc, reg, buffer, length, 1)) <= 0) {
+        UDCVDBG(udc, "mcu third read error: %d, %d, %d\n", rc1, rc2, rc3);
         mutex_unlock(&udc->spi_read_mutex);
         return rc3;
       }
@@ -167,7 +173,7 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   return rc1;
 }
 
-static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
+static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length, u8 showpart)
 {
   struct spi_transfer t;
   struct spi_message msg;
@@ -198,7 +204,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
-  //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE);
+  //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE, NULL);
   spi_message_add_tail(&t, &msg);
 
   if (!spi_sync(udc->spi, &msg)) {
@@ -211,7 +217,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
       UDCVDBG(udc, "Mcu wait time(us): %d, rc:%d\n", wait_time, rc);
     }
     if (rc) {
-      rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length);
+      rc = _internal_read_buffer(udc, VUSB_SPI_CMD_READ | reg, udc->spitransfer, length, showpart);
     } else {
       //UDCVDBG(udc, "Mcu wait event error for spi read\n");
       memset(udc->spitransfer + VUSB_SPI_HEADER, 0, length );
@@ -268,7 +274,7 @@ static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 leng
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
-  //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE);
+  //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE, NULL);
   spi_message_add_tail(&t, &msg);
 
   int status = spi_sync(udc->spi, &msg);

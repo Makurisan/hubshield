@@ -50,19 +50,21 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 	if (!todo || ep->id == 0)
 		return false;
 
-	//epien = spi_rd8(udc, VUSB_REG_EPIEN);
-	//epdis = spi_rd8(udc, VUSB_REG_CLRTOGS);
+  UDCVDBG(udc, "---> USB-Pipe spi_vusb_enable: %x\n", 2);
 
-	if (todo == ENABLE) {
-		epdis &= ~BIT(ep->id + 4);
-		epien |= BIT(ep->id + 1);
-	} else {
-		epdis |= BIT(ep->id + 4);
-		epien &= ~BIT(ep->id + 1);
-	}
+	////epien = spi_rd8(udc, VUSB_REG_EPIEN);
+	////epdis = spi_rd8(udc, VUSB_REG_CLRTOGS);
 
-	//spi_wr8(udc, VUSB_REG_CLRTOGS, epdis);
-	//spi_wr8(udc, VUSB_REG_EPIEN, epien);
+	//if (todo == ENABLE) {
+	//	epdis &= ~BIT(ep->id + 4);
+	//	epien |= BIT(ep->id + 1);
+	//} else {
+	//	epdis |= BIT(ep->id + 4);
+	//	epien &= ~BIT(ep->id + 1);
+	//}
+
+	////spi_wr8(udc, VUSB_REG_CLRTOGS, epdis);
+	////spi_wr8(udc, VUSB_REG_EPIEN, epien);
 
 	return true;
 }
@@ -313,7 +315,7 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
     UDCVDBG(udc, "setup error: Type: %x Request: %x\n", setup.bRequestType, setup.bRequest);
     // print the setup packet which leads to the error
-    pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ);
+    pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_ERROR, NULL);
   	//	/* Stall EP0 */
     //UDCVDBG(udc, "Stall EP0 %x\n", udc->gadget);
     //	//spi_wr8(udc, VUSB_REG_EPSTALLS,
@@ -367,13 +369,12 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 		done = 1;
 		goto xfer_done;
 	}
-  //pr_hex_mark(buf, length, PRINTF_READ);
+  //pr_hex_mark(buf, length, PRINTF_READ, NULL);
 
 	done = 0;
 	if (in) {
 		prefetch(buf);
-    pr_hex_mark(buf, length, PRINTF_READ);
-
+    pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
     udc->spitransfer[0] = REG_PIPEIRQ;
     vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, buf, length);
 
@@ -396,7 +397,7 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 		done = 1;
 
 xfer_done:
-	if (done) {
+	if (done) { 
 		unsigned long flags;
 
 		spin_lock_irqsave(&ep->lock, flags);
@@ -448,13 +449,14 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   return iret;
 }
 
-static int vusb_handle_irqs(struct vusb_udc *udc)
+static int vusb_thread_data(struct vusb_udc *udc)
 {
 	bool ret = false;
   int rc;
 
   // read only if something is to do
-  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0) {
+  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0 &&
+    test_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request) == 0) {
     return false;
   }
 
@@ -463,7 +465,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false; 
   }
-  //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ);
+  //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ, NULL);
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
@@ -472,18 +474,17 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
   udc->irq_map.PIPIRQ = htonl(udc->irq_map.PIPIRQ);
   u32 pipeirq = udc->irq_map.PIPIEN & udc->irq_map.PIPIRQ;
 
-  // clear only if we have one to do
-  if((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
-    clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
-  }
+  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
+    // clear only if we have one to do
+    if ((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
+      clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
+    }
 
-  // check if a bit is set
-  if(hweight32(pipeirq)) {
-    //UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
+    // check if a bit is set
+    if (hweight32(pipeirq)) {
+      //UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
 
 // we must check if we have CTRL interrupt 0 something
-    if (pipeirq != BIT(3)) { // 
-      // clear one mcu irq bit
       udc->spitransfer[0] = REG_PIPEIRQ;
       u8 irqs = _bf_ffsl(pipeirq);
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
@@ -496,7 +497,7 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
         //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", irq);
         struct usb_ctrlrequest setup;
         memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER, sizeof(struct usb_ctrlrequest));
-        //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ);
+        //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, NULL);
         vusb_handle_setup(udc, irqs, setup);
         // clear the irq we just processed
         udc->irq_map.PIPIRQ &= ~irqs;
@@ -504,26 +505,6 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
       }
       else
         UDCVDBG(udc, "--> error reading setup data\n");
-    }
-// debug
-    if (pipeirq == BIT(3)) { // _PIPIRQ3
-      //UDCVDBG(udc, "---> USB-Pipe setup get index: %x %x\n", irqs, pipeirq);
-      vusb_do_data(udc, 2, 1);
-
-      // test
-      //udc->spitransfer[0] = REG_PIPEIRQ;
-      //*(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      //vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, sizeof(u8) + sizeof(u32));
-
-      // clear irq
-      u8 irqs = _bf_ffsl(pipeirq);
-      udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
-   
-      // clear the irq we just processed
-      udc->irq_map.PIPIRQ &= ~irqs;
-      return true;
     }
   }
 
@@ -561,20 +542,13 @@ static int vusb_handle_irqs(struct vusb_udc *udc)
     return true;
   }
 
-	//if (usbirq & NOVBUSIRQ) {
-	//	//spi_wr8(udc, VUSB_REG_USBIRQ, NOVBUSIRQ);
-	//	UDCVDBG(udc,  "Cable pulled out\n");
-	//	return true;
-	//}
-
-	//if (usbirq & URESDNIRQ) {
-	//	//spi_wr8(udc, VUSB_REG_USBIRQ, URESDNIRQ);
-	//	UDCVDBG(udc,  "USB Reset\n");
-	//	//spi_wr8(udc, VUSB_REG_USBIEN, URESDNIRQ | URESIRQ);
-	//	//spi_wr8(udc, VUSB_REG_EPIEN, SUDAVIRQ | IN0BAVIRQ
-	//	//	| OUT0DAVIRQ);
-	//	return true;
-	//}
+  if (test_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request)) {
+    clear_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request);
+    if (udc->irq_map.PIPIEN & BIT(3)) { // 
+      vusb_do_data(udc, 2, 1);
+      return true;
+    }
+  }
 
 	return false;
 }
@@ -617,6 +591,7 @@ static int vusb_thread(void *dev_id)
       //dev_info(udc->dev, "thread timeout value: %d ...\n", udc->service_request);
       goto loop;
     }
+    //UDCVDBG(udc, "---> USB-Pipe vusb_thread: %x\n", 5);
 
  		/* If disconnected */
 		if (!udc->softconnect)
@@ -627,7 +602,7 @@ static int vusb_thread(void *dev_id)
 		//	goto loop;
 		//}
 
-		if (vusb_handle_irqs(udc)) {
+		if (vusb_thread_data(udc)) {
 			loop_again = 1;
 			goto loop;
 		}
@@ -637,8 +612,11 @@ static int vusb_thread(void *dev_id)
 		for (i = 1; i < VUSB_MAX_EPS; i++) {
 			struct vusb_ep *ep = &udc->ep[i];
 
-			if (spi_vusb_enable(ep))
-				loop_again = 1;
+      if (spi_vusb_enable(ep))
+      {
+        UDCVDBG(udc, "---> USB-Pipe vusb_thread: %x\n", 4);
+        loop_again = 1;
+      }
 			if (spi_vusb_stall(ep))
 				loop_again = 1;
 		}

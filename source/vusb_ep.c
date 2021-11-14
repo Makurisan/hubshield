@@ -130,7 +130,6 @@ static int vusb_ep_disable(struct usb_ep* _ep)
 
   wake_up_process(udc->thread_service);
 
-
   return 0;
 }
 
@@ -165,12 +164,30 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   _req->status = -EINPROGRESS;
   _req->actual = 0;
 
+  dev_dbg(udc->dev, "vusb_ep_queue %s\n", ep->name);
+
   spin_lock_irqsave(&ep->lock, flags);
   list_add_tail(&req->queue, &ep->queue);
   spin_unlock_irqrestore(&ep->lock, flags);
 
   wake_up_process(udc->thread_service);
-  dev_dbg(udc->dev, "vusb_ep_queue %s\n", ep->name);
+  if (!ep->ep_usb.caps.type_control && ep->ep_usb.caps.dir_in)
+  {
+    UDCVDBG(ep->udc, "---> USB-Pipe vusb_ep_queue: %s\n", ep->name);
+    //spin_lock_irqsave(&udc->lock, flags);
+    //if ((udc->todo & ENABLE_IRQ) == 0) {
+    //  disable_irq_nosync(udc->mcu_irq);
+    //  udc->todo |= ENABLE_IRQ;
+    //}
+    //spin_unlock_irqrestore(&udc->lock, flags);
+
+    set_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request);
+    //if (req->usb_req.complete)
+    //  req->usb_req.complete(&ep->ep_usb, &req->usb_req);
+    spin_lock_irqsave(&udc->wq_lock, flags);
+    wake_up_interruptible(&udc->service_thread_wq);
+    spin_unlock_irqrestore(&udc->wq_lock, flags);
+  }
 
   return 0;
 }
@@ -180,6 +197,8 @@ static int vusb_ep_dequeue(struct usb_ep* _ep, struct usb_request* _req)
   struct vusb_req* t, * req = to_vusb_req(_req);
   struct vusb_ep* ep = to_vusb_ep(_ep);
   unsigned long flags;
+
+  UDCVDBG(ep->udc, "---> USB-Pipe vusb_ep_dequeue: %x\n", 2);
 
   spin_lock_irqsave(&ep->lock, flags);
 
