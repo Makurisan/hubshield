@@ -242,6 +242,7 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     ep->udc = udc;
     ep->id = idx;
+    ep->port = 1; // port on the mcu
     ep->halted = 0;
     ep->maxpacket = 0;
     ep->ep_usb.name = ep->name;
@@ -254,7 +255,7 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.type_control = true;
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;
-      ep->pi_idx = 2;
+      ep->pi_idx = 2; //  _PIPIRQ2	BIT(2), Pipe 2
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep0");
       continue;
     }
