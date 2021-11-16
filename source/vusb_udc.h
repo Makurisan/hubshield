@@ -77,6 +77,7 @@ enum vusb_req_code {
 #define VUSB_REG_PIPE_SETUP_GET   0x15
 #define VUSB_REG_DEBUG            0x16
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
+#define VUSB_REG_PIPE_EP_ENABLE   0x18
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
@@ -186,8 +187,9 @@ enum vusb_req_code {
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
-#define VUSB_MCU_IRQ_GPIO 0
-#define VUSB_MCU_EP_REQ      1
+#define VUSB_MCU_IRQ_GPIO    0x00
+#define VUSB_MCU_EP_IN       0x01
+#define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
 // register data map
 #pragma pack(1)
@@ -213,7 +215,7 @@ struct vusb_ep {
   struct vusb_udc* udc;
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
-  int idx; // pipe index on MCU
+  int pi_idx; // pipe index on MCU
   unsigned int maxpacket;
   spinlock_t lock;
   int halted;
@@ -280,6 +282,7 @@ struct vusb_udc {
   struct usb_gadget gadget;
 
   struct vusb_ep ep[VUSB_MAX_EPS];
+  struct vusb_req ep0req;
 
   struct usb_gadget_driver* driver;
 
@@ -292,7 +295,6 @@ struct vusb_udc {
 
   struct mutex spi_bus_mutex;
 
-  struct vusb_req ep0req;
 
   struct device* dev;
 

@@ -50,21 +50,16 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 	if (!todo || ep->id == 0)
 		return false;
 
-  UDCVDBG(udc, "---> USB-Pipe spi_vusb_enable: %x\n", 2);
+	if (todo == ENABLE) {
+    UDCVDBG(udc, "spi_vusb_enable name:%s/%d, addr: %x, attrib:%x\n",
+      ep->name, ep->pi_idx, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
+    udc->spitransfer[0] = ep->pi_idx; // octopus pipe
+    memmove(&udc->spitransfer[1], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
+    vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, udc->spitransfer, 
+                        sizeof(u8) + sizeof(struct usb_endpoint_descriptor));
+	} else {
 
-	////epien = spi_rd8(udc, VUSB_REG_EPIEN);
-	////epdis = spi_rd8(udc, VUSB_REG_CLRTOGS);
-
-	//if (todo == ENABLE) {
-	//	epdis &= ~BIT(ep->id + 4);
-	//	epien |= BIT(ep->id + 1);
-	//} else {
-	//	epdis |= BIT(ep->id + 4);
-	//	epien &= ~BIT(ep->id + 1);
-	//}
-
-	////spi_wr8(udc, VUSB_REG_CLRTOGS, epdis);
-	////spi_wr8(udc, VUSB_REG_EPIEN, epien);
+	}
 
 	return true;
 }
@@ -298,11 +293,11 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
     udc->spitransfer[0] = REG_PIPIRQ4;
     *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
     vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
-		UDCVDBG(udc, "Assigned Address=%d, irq:%d\n", udc->setup.wValue, irq);
+		UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, irq:%d\n", udc->setup.wValue, irq);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe/idx:%d\n", udc->setup.wValue, irq);
     /* Requests with no data phase, status phase from udc */
 		if ((udc->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -375,9 +370,9 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 	if (in) {
 		prefetch(buf);
     pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
-    udc->spitransfer[0] = REG_PIPEIRQ;
-    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, buf, length);
-
+    udc->spitransfer[0] = req->ep->pi_idx;
+    memmove(&udc->spitransfer[1], buf, length); // mcu pipe index
+    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+1);
     //spi_wr_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
 		//spi_wr8(udc, VUSB_REG_EP0BC + ep_id, length);
 		if (length <= psz)
@@ -456,7 +451,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 
   // read only if something is to do
   if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0 &&
-    test_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request) == 0) {
+    test_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request) == 0) {
     return false;
   }
 
@@ -474,6 +469,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
   udc->irq_map.PIPIRQ = htonl(udc->irq_map.PIPIRQ);
   u32 pipeirq = udc->irq_map.PIPIEN & udc->irq_map.PIPIRQ;
 
+  // irq raised
   if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
     // clear only if we have one to do
     if ((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
@@ -536,19 +532,21 @@ static int vusb_thread_data(struct vusb_udc *udc)
     // connect the usb to the host   
     udc->spitransfer[0] = REG_CPUCTL;
 
-// firmware version auslesen, is chip compatible
+  // firmware version auslesen, is chip compatible
     udc->spitransfer[1] = SOFTCONT;
     vusb_write_buffer(udc, VUSB_REG_SET, udc->spitransfer, 2);
     return true;
   }
 
-  if (test_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request)) {
-    clear_bit(VUSB_MCU_EP_REQ, (void*)&udc->service_request);
+ // write ep IN to the MCU 
+  if (test_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request)) {
+    clear_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request);
     if (udc->irq_map.PIPIEN & BIT(3)) { // 
       vusb_do_data(udc, 2, 1);
       return true;
     }
   }
+
 
 	return false;
 }
@@ -609,18 +607,20 @@ static int vusb_thread(void *dev_id)
 
 		vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
 
-		for (i = 1; i < VUSB_MAX_EPS; i++) {
-			struct vusb_ep *ep = &udc->ep[i];
+    if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
+      for (i = 1; i < VUSB_MAX_EPS; i++) {
+			  struct vusb_ep *ep = &udc->ep[i];
+        if (spi_vusb_enable(ep))
+        {
+          loop_again = 1;
+        }
+			  if (spi_vusb_stall(ep))
+				  loop_again = 1;
+	  	}
+      clear_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request);
+    }
 
-      if (spi_vusb_enable(ep))
-      {
-        UDCVDBG(udc, "---> USB-Pipe vusb_thread: %x\n", 4);
-        loop_again = 1;
-      }
-			if (spi_vusb_stall(ep))
-				loop_again = 1;
-		}
-loop:
+  loop:
 		mutex_unlock(&udc->spi_bus_mutex);
 	}
 
@@ -852,8 +852,7 @@ static int vusb_probe(struct spi_device *spi)
   // clear the bit that the thread is waiting for something
   clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
 
-  udc->thread_service = kthread_create(vusb_thread, udc,
-    "vusb-thread");
+  udc->thread_service = kthread_create(vusb_thread, udc, "vusb-thread");
   if (IS_ERR(udc->thread_service))
     return PTR_ERR(udc->thread_service);
 
