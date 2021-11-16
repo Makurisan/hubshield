@@ -53,10 +53,11 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 	if (todo == ENABLE) {
     UDCVDBG(udc, "spi_vusb_enable name:%s/%d, addr: %x, attrib:%x\n",
       ep->name, ep->pi_idx, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
-    udc->spitransfer[0] = ep->pi_idx; // octopus pipe
-    memmove(&udc->spitransfer[1], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
+    udc->spitransfer[0] = ep->port; // octopus port
+    udc->spitransfer[1] = ep->pi_idx; // octopus pipe
+    memmove(&udc->spitransfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
     vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, udc->spitransfer, 
-                        sizeof(u8) + sizeof(struct usb_endpoint_descriptor));
+                        sizeof(u8)*2 + sizeof(struct usb_endpoint_descriptor));
 	} else {
 
 	}
