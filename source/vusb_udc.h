@@ -216,6 +216,7 @@ struct vusb_ep {
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int pi_idx; // pipe index on MCU
+  int port;   // port on MCU
   unsigned int maxpacket;
   spinlock_t lock;
   int halted;
