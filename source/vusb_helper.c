@@ -38,6 +38,8 @@ void pr_hex_mark(const char* mem, int count, int mark, const char *label)
   u16 length = *(u16*)&mem[2];
 
   int i, k = 0;
+  count = count > 500?64:count;
+
   for (i = 0; i < count /*&& count < sizeof(hexline)*/; i++)
   {
     if (i == 3) {
