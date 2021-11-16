@@ -472,36 +472,38 @@ static int vusb_thread_data(struct vusb_udc *udc)
 
   // irq raised
   if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
-    // clear only if we have one to do
+    // count the bits, clear only if we have one to do
     if ((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
       clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
     }
 
     // check if a bit is set
     if (hweight32(pipeirq)) {
-      //UDCVDBG(udc, "USB-Pipe bits: %x\n", pipeirq);
-
-// we must check if we have CTRL interrupt 0 something
-      udc->spitransfer[0] = REG_PIPEIRQ;
       u8 irqs = _bf_ffsl(pipeirq);
+
+      udc->spitransfer[0] = REG_PIPEIRQ;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
       vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
       //read the setup data
       udc->spitransfer[0] = REG_PIPEIRQ;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      if (vusb_read_buffer(udc, VUSB_REG_PIPE_SETUP_GET, udc->spitransfer, sizeof(u8) * 8)) {
-        //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", irq);
-        struct usb_ctrlrequest setup;
-        memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER, sizeof(struct usb_ctrlrequest));
-        //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, NULL);
-        vusb_handle_setup(udc, irqs, setup);
+      if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, sizeof(u8) * 8)) {
+        spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+        //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
+        if (cmd->length > 1) {
+          struct usb_ctrlrequest setup;
+          memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
+          //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, NULL);
+          vusb_handle_setup(udc, irqs, setup);
+        }
+        else {
+          UDCVDBG(udc, "USB-Pipe out: %x\n", cmd->length);
+        }
         // clear the irq we just processed
         udc->irq_map.PIPIRQ &= ~irqs;
-        return true;
       }
-      else
-        UDCVDBG(udc, "--> error reading setup data\n");
+      return true;
     }
   }
 

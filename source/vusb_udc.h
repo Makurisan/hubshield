@@ -74,7 +74,7 @@ enum vusb_req_code {
 // port register							 
 
 // pipe register
-#define VUSB_REG_PIPE_SETUP_GET   0x15
+#define VUSB_REG_PIPE_GET_DATA    0x15
 #define VUSB_REG_DEBUG            0x16
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
 #define VUSB_REG_PIPE_EP_ENABLE   0x18
@@ -137,30 +137,18 @@ enum vusb_req_code {
 
 #define REG_PIPIRQ4	7
 #define REG_PIPEIRQ REG_PIPIRQ4 // all 32 bits
-#define REG_PIPIRQ3	8
-#define REG_PIPIRQ2	9
-#define REG_PIPIRQ1	10
- /* same as PIPIRQ1/PIPIRQ8 */
-#define _PIPIRQ7 BIT(7) // Pipe 7
-#define _PIPIRQ6	BIT(6) // Pipe 6
-#define _PIPIRQ5	BIT(5) // Pipe 5
-#define _PIPIRQ4	BIT(4) // Pipe 4
-#define _PIPIRQ3	BIT(3) // Pipe 3
-#define _PIPIRQ2	BIT(2) // Pipe 2
-#define _PIPIRQ1	BIT(1) // Pipe 1
-#define _PIPIRQ0	BIT(0) // Pipe 0
 #define REG_PIPIEN4	11
-#define REG_PIPIEN3	12
-#define REG_PIPIEN2	13
-#define REG_PIPIEN1 14
+#define REG_PIPIEN REG_PIPIEN4 // all 32 bits
+#define REG_PIPIQST4	15 
+#define REG_PIPIQST	REG_PIPIQST4 // Setup IRQ
 
 //#define REG_PIPIEN_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIEN4])
 //#define REG_PIPIRQ_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIRQ4])
 
-#define REG_SPIMOD	15 // Edge mode: rising/falling; low, high
-#define REG_PORTS 	16 // count of ports
-#define REG_PIPES 	17 // count of pipes
-#define REG_TDS   	18 // count of tds
+#define REG_SPIMOD	19 // Edge mode: rising/falling; low, high
+#define REG_PORTS 	20 // count of ports
+#define REG_PIPES 	21 // count of pipes
+#define REG_TDS   	22 // count of tds
 
 
 #define VUSB_MAX_EPS		4
