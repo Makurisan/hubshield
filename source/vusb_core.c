@@ -5,7 +5,7 @@
  * Author: Manfred Kubica <ManfredKubica@web.de>
  *
  */
-
+ 
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -34,6 +34,7 @@ static const char driver_name[] = "vusb-udc";
 
 /* Forward declaration */
 static int vusb_remove(struct spi_device* spi);
+struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx);
 
 static int spi_vusb_enable(struct vusb_ep *ep)
 {
@@ -491,14 +492,16 @@ static int vusb_thread_data(struct vusb_udc *udc)
       if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, sizeof(u8) * 8)) {
         spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
         //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
-        if (cmd->length > 1) {
+        struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
+        if (ep->ep_usb.caps.type_control) {
           struct usb_ctrlrequest setup;
           memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
           //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, NULL);
           vusb_handle_setup(udc, irqs, setup);
         }
         else {
-          UDCVDBG(udc, "USB-Pipe out: %x\n", cmd->length);
+          pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name);
+          //UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
         }
         // clear the irq we just processed
         udc->irq_map.PIPIRQ &= ~irqs;
