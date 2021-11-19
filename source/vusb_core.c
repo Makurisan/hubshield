@@ -270,6 +270,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 
 void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setup)
 {
+  struct vusb_ep* ep = vusb_get_ep(udc, irq);
+
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
 	udc->setup.wIndex = cpu_to_le16(setup.wIndex);
@@ -292,10 +294,8 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 			break;
 		}
     // ack setaddress
-    udc->spitransfer[0] = REG_PIPIRQ4;
-    *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-    vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
-		UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
+    vusb_spi_pipe_ack(udc, irq);
+    UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
@@ -372,11 +372,10 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
 	if (in) {
 		prefetch(buf);
     pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
-    udc->spitransfer[0] = req->ep->pi_idx;
-    memmove(&udc->spitransfer[1], buf, length); // mcu pipe index
-    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+1);
-    //spi_wr_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
-		//spi_wr8(udc, VUSB_REG_EP0BC + ep_id, length);
+    udc->spitransfer[0] = req->ep->port;
+    udc->spitransfer[1] = req->ep->pi_idx;
+    memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
 		if (length <= psz)
 			done = 1;
 	} else {
@@ -402,9 +401,7 @@ xfer_done:
 		spin_unlock_irqrestore(&ep->lock, flags);
 
     if (ep_id == 0) {
-      udc->spitransfer[0] = REG_PIPIRQ4;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(2)); // take one bit
-      vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+      vusb_spi_pipe_ack(udc, ep->pi_idx);
     }
 		vusb_req_done(req, 0);
 	}
@@ -480,31 +477,31 @@ static int vusb_thread_data(struct vusb_udc *udc)
 
     // check if a bit is set
     if (hweight32(pipeirq)) {
-      u8 irqs = _bf_ffsl(pipeirq);
-
+      u8 irq = _bf_ffsl(pipeirq);
+      struct vusb_ep* ep = vusb_get_ep(udc, irq);     
       udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
+      *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
       vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
       //read the setup data
-      udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irqs)); // take one bit
-      if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, sizeof(u8) * 8)) {
+      udc->spitransfer[0] = ep->port; // octopus port
+      udc->spitransfer[1] = ep->pi_idx; // octopus pipe
+      if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, 1 + sizeof(u8) * 8)) {
         spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
         //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
         struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
         if (ep->ep_usb.caps.type_control) {
           struct usb_ctrlrequest setup;
           memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
-          //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, NULL);
-          vusb_handle_setup(udc, irqs, setup);
+          //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
+          vusb_handle_setup(udc, irq, setup);
         }
         else {
           pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name);
           //UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
         }
         // clear the irq we just processed
-        udc->irq_map.PIPIRQ &= ~irqs;
+        udc->irq_map.PIPIRQ &= ~irq;
       }
       return true;
     }

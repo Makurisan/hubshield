@@ -31,6 +31,14 @@
 static int wakeup_flag = 0;
 static ktime_t wait_endtime;
 
+void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq)
+{
+  udc->spitransfer[0] = REG_PIPEIRQ;
+  *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
+  vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+
+}
+
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
 {
   struct vusb_udc* udc = dev_id;
@@ -60,13 +68,21 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   struct spi_transfer	tr;
   struct spi_message	m;
   u8 cmd_reg;
+  u8 tx[256];
 
   spi_message_init(&m);
   memset(&tr, 0, sizeof(tr));
 
-#ifndef READ_ONE 
+#ifndef READ_ONE
+  memset(tx, 0xee, 255);
+  tr.tx_buf = tx;
   tr.rx_buf = buffer;
   tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
+
+  tr.delay_usecs = 0;
+  tr.cs_change_delay.unit = 0;
+  tr.cs_change_delay.value = 100;
+
   spi_message_add_tail(&tr, &m);
   // read the four bytes header
   if (!spi_sync(spi, &m))

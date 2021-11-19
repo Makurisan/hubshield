@@ -139,16 +139,14 @@ enum vusb_req_code {
 #define REG_PIPEIRQ REG_PIPIRQ4 // all 32 bits
 #define REG_PIPIEN4	11
 #define REG_PIPIEN REG_PIPIEN4 // all 32 bits
-#define REG_PIPIQST4	15 
-#define REG_PIPIQST	REG_PIPIQST4 // Setup IRQ
 
 //#define REG_PIPIEN_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIEN4])
 //#define REG_PIPIRQ_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIRQ4])
 
-#define REG_SPIMOD	19 // Edge mode: rising/falling; low, high
-#define REG_PORTS 	20 // count of ports
-#define REG_PIPES 	21 // count of pipes
-#define REG_TDS   	22 // count of tds
+#define REG_SPIMOD	15 // Edge mode: rising/falling; low, high
+#define REG_PORTS 	16 // count of ports
+#define REG_PIPES 	17 // count of pipes
+#define REG_TDS   	18 // count of tds
 
 
 #define VUSB_MAX_EPS		4
@@ -309,5 +307,6 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
 void vusb_handle_setup(struct vusb_udc* udc, u8 irq, struct usb_ctrlrequest setup);
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
+void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
 
 #endif /* __VUSB_UDC_H */
