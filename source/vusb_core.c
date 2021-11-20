@@ -337,8 +337,7 @@ void vusb_req_done(struct vusb_req *req, int status)
   }
 
   if (status && status != -ESHUTDOWN) {
-    UDCVDBG(udc, "%s done %p, status %d\n",
-      ep->ep_usb.name, req, status);
+    UDCVDBG(udc, "%s done %p, status %d\n", ep->ep_usb.name, req, status);
   }
 
 	if (req->usb_req.complete)
@@ -365,18 +364,18 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-  //pr_hex_mark(buf, length, PRINTF_READ, NULL);
+  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
 
 	done = 0;
 	if (ep->ep_usb.caps.dir_in) {
 		prefetch(buf);
-		pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
+		//pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
 		udc->spitransfer[0] = req->ep->port;
 		udc->spitransfer[1] = req->ep->pipe;
 		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
 		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
-		UDCVDBG(udc, "vusb_do_data, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 		if (length < psz) {
+		UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 			done = 1;
 		}
 	}
@@ -480,7 +479,8 @@ static int vusb_thread_data(struct vusb_udc *udc)
     if (hweight32(pipeirq)) {
       u8 irq = _bf_ffsl(pipeirq);
       struct vusb_ep* ep = vusb_get_ep(udc, irq);     
-      udc->spitransfer[0] = REG_PIPEIRQ;
+
+			udc->spitransfer[0] = REG_PIPEIRQ;
       *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
       vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
 
@@ -498,7 +498,8 @@ static int vusb_thread_data(struct vusb_udc *udc)
           vusb_handle_setup(udc, irq, setup);
         }
         else {
-          pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name);
+					// comes from the mcu and must be processed
+          pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
           //UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
         }
         // clear the irq we just processed
@@ -611,8 +612,10 @@ static int vusb_thread(void *dev_id)
 			loop_again = 1;
 			goto loop;
 		}
+
+		/* get done with the EP0 ZLP */
 		struct vusb_ep* ep = vusb_get_ep(udc, 2);
-		vusb_do_data(udc, ep); /* get done with the EP0 ZLP */
+		vusb_do_data(udc, ep);
 
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {

@@ -26,7 +26,14 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
-void pr_hex_mark(const char* mem, int count, int mark, const char *label)
+void pr_hex_mark_debug(const char* mem, int count, int mark, const char* label, const char* debug);
+
+void pr_hex_mark(const char* mem, int count, int mark, const char* label)
+{
+  pr_hex_mark_debug(mem, count, mark, label, NULL);
+}
+
+void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, const char *debug)
 {
   char hexbyte[64];
   char headbyte[30];
@@ -45,7 +52,7 @@ void pr_hex_mark(const char* mem, int count, int mark, const char *label)
     if (i == 3) {
       //  sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
       if (length)
-        snprintf(hexbyte, 64, "%02X] length: %04x/%d label: %s", mem[i], count, count, label?label:"");
+        snprintf(hexbyte, 64, "%02X] length: %04x/%d label: %s %s", mem[i], count, count, label?label:"", debug?debug: "");
       else
         sprintf(hexbyte, "%02X] ", mem[i]);
       if (count > 4) {

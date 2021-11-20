@@ -300,6 +300,7 @@ struct vusb_udc {
 
 int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env);
 void pr_hex_mark(const char* mem, int count, int mark, const char* label);
+void pr_hex_mark_debug(const char* mem, int count, int mark, const char* label, const char* debug);
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_eps_init(struct vusb_udc* udc);
