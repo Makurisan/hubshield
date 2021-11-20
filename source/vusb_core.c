@@ -52,10 +52,10 @@ static int spi_vusb_enable(struct vusb_ep *ep)
 		return false;
 
 	if (todo == ENABLE) {
-    UDCVDBG(udc, "spi_vusb_enable name:%s/%d, addr: %x, attrib:%x\n",
-      ep->name, ep->pi_idx, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
+    UDCVDBG(udc, "spi_vusb_enable name:%s, addr: %x, attrib:%x\n",
+      ep->name, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
     udc->spitransfer[0] = ep->port; // octopus port
-    udc->spitransfer[1] = ep->pi_idx; // octopus pipe
+    udc->spitransfer[1] = ep->pipe; // octopus pipe
     memmove(&udc->spitransfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
     vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, udc->spitransfer, 
                         sizeof(u8)*2 + sizeof(struct usb_endpoint_descriptor));
@@ -345,9 +345,8 @@ void vusb_req_done(struct vusb_req *req, int status)
 		req->usb_req.complete(&ep->ep_usb, &req->usb_req);
 }
 
-static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
+static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 {
-	struct vusb_ep *ep = &udc->ep[ep_id];
 	struct vusb_req *req;
 	int done, length, psz;
 	void *buf;
@@ -369,16 +368,19 @@ static int vusb_do_data(struct vusb_udc *udc, int ep_id, int in)
   //pr_hex_mark(buf, length, PRINTF_READ, NULL);
 
 	done = 0;
-	if (in) {
+	if (ep->ep_usb.caps.dir_in) {
 		prefetch(buf);
-    pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
-    udc->spitransfer[0] = req->ep->port;
-    udc->spitransfer[1] = req->ep->pi_idx;
-    memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
-    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
-		if (length <= psz)
+		pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
+		udc->spitransfer[0] = req->ep->port;
+		udc->spitransfer[1] = req->ep->pipe;
+		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
+		UDCVDBG(udc, "vusb_do_data, name: %s, length: %d psz: %d\n", ep->name, length, psz);
+		if (length < psz) {
 			done = 1;
-	} else {
+		}
+	}
+	if (ep->ep_usb.caps.dir_out) {
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		length = min(length, psz);
 		prefetchw(buf);
@@ -400,9 +402,8 @@ xfer_done:
 		list_del_init(&req->queue);
 		spin_unlock_irqrestore(&ep->lock, flags);
 
-    if (ep_id == 0) {
-      vusb_spi_pipe_ack(udc, ep->pi_idx);
-    }
+		if (ep->ep_usb.caps.type_control)
+			vusb_spi_pipe_ack(udc, ep->pipe);
 		vusb_req_done(req, 0);
 	}
 	return true;
@@ -485,7 +486,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 
       //read the setup data
       udc->spitransfer[0] = ep->port; // octopus port
-      udc->spitransfer[1] = ep->pi_idx; // octopus pipe
+      udc->spitransfer[1] = ep->pipe; // octopus pipe
       if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, 1 + sizeof(u8) * 8)) {
         spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
         //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
@@ -542,15 +543,18 @@ static int vusb_thread_data(struct vusb_udc *udc)
   }
 
  // write ep IN to the MCU 
+	// change if more than one port is used
   if (test_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request)) {
     clear_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request);
-    if (udc->irq_map.PIPIEN & BIT(3)) { // 
-      vusb_do_data(udc, 2, 1);
-      return true;
+    if (hweight32(udc->PIPEIN)) {
+			u8 irq = _bf_ffsl(udc->PIPEIN);
+			struct vusb_ep* ep = vusb_get_ep(udc, irq);
+			//UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
+			vusb_do_data(udc, ep);
+			udc->PIPEIN &= ~irq;
+			return true;
     }
   }
-
-
 	return false;
 }
 
@@ -607,8 +611,8 @@ static int vusb_thread(void *dev_id)
 			loop_again = 1;
 			goto loop;
 		}
-
-		vusb_do_data(udc, 0, 1); /* get done with the EP0 ZLP */
+		struct vusb_ep* ep = vusb_get_ep(udc, 2);
+		vusb_do_data(udc, ep); /* get done with the EP0 ZLP */
 
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {

@@ -201,7 +201,7 @@ struct vusb_ep {
   struct vusb_udc* udc;
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
-  int pi_idx; // pipe index on MCU
+  int pipe; // pipe index on MCU
   int port;   // port on MCU
   unsigned int maxpacket;
   spinlock_t lock;
@@ -241,6 +241,8 @@ struct vusb_udc {
 
   /* MCU irq data */
   vusb_req_map_t irq_map;
+  /* USB irqs */
+  u32 PIPEIN; // IN for the mcu
 
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;

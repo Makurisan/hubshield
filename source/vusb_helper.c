@@ -52,6 +52,10 @@ void pr_hex_mark(const char* mem, int count, int mark, const char *label)
         snprintf(headbyte, 30, "\n   %02X %02X %02X %02X ", mem[0], mem[1], mem[2], mem[3]);
         strcat(hexbyte, headbyte);
       }
+      if (count < 4) {
+        snprintf(headbyte, 30, "\n   %02X ", mem[0]);
+        strcat(hexbyte, headbyte);
+      }
     }
     else {
       if ((i + 1) % 8 == 0)

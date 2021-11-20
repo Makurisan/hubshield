@@ -173,15 +173,19 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   list_add_tail(&req->queue, &ep->queue);
   spin_unlock_irqrestore(&ep->lock, flags);
 
+  // EP Interrupt processing
   if (!ep->ep_usb.caps.type_control && ep->ep_usb.caps.dir_in)
   {
-    dev_info(udc->dev, "vusb_ep_queue %s\n", ep->name);
-
+    dev_info(udc->dev, "vusb_ep_queue, name: %s pipe: %d\n", ep->name, ep->pipe);
+    udc->PIPEIN |= BIT(ep->pipe);
     set_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request);
     spin_lock_irqsave(&udc->wq_lock, flags);
     wake_up_interruptible(&udc->service_thread_wq);
     spin_unlock_irqrestore(&udc->wq_lock, flags);
   }
+  //else {
+  //  dev_info(udc->dev, "- vusb_ep_queue %s\n", ep->name);
+  //}
 
   return 0;
 }
@@ -234,7 +238,7 @@ struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
 
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &udc->ep[idx];
-    if (ep->pi_idx == ep_idx) {
+    if (ep->pipe == ep_idx) {
       return ep;
     }
   }
@@ -261,6 +265,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->ep_usb.name = ep->name;
     ep->ep_usb.ops = &vusb_ep_ops;
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET);
+    ep->pipe = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
 
     if (idx == 0) { /* For EP0 */
       ep->ep_usb.desc = &ep0_desc;
@@ -268,23 +273,19 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.type_control = true;
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;
-      ep->pi_idx = 2; //  _PIPIRQ2	BIT(2), Pipe 2
-      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep0");
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d", idx);
       continue;
     }
 
     if (idx == 1) { /* EP1 is OUT */
       ep->ep_usb.caps.dir_in = false;
       ep->ep_usb.caps.dir_out = true;
-      ep->pi_idx = 3;
-      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep1-out");
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-out", idx);
     }
     else { /* EP2 & EP3 are IN */
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = false;
-      ep->pi_idx = 4;
-      snprintf(ep->name, VUSB_EPNAME_SIZE,
-        "ep%d-in", idx);
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-in", idx);
     }
     ep->ep_usb.caps.type_iso = false;
     ep->ep_usb.caps.type_int = true;
