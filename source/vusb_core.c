@@ -81,13 +81,15 @@ static int spi_vusb_stall(struct vusb_ep *ep)
 	if (!todo || ep->id == 0)
 		return false;
 
+	UDCVDBG(udc, "spi_vusb_stall name:%s, addr: %x, attrib:%x\n",
+		ep->name, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
+
 	//epstalls = spi_rd8(udc, VUSB_REG_EPSTALLS);
 	if (todo == STALL) {
 		ep->halted = 1;
 		epstalls |= BIT(ep->id + 1);
 	} else {
 		u8 clrtogs;
-
 		ep->halted = 0;
 		epstalls &= ~BIT(ep->id + 1);
 		//clrtogs = spi_rd8(udc, VUSB_REG_CLRTOGS);
@@ -294,7 +296,7 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 			break;
 		}
     // ack setaddress
-    vusb_spi_pipe_ack(udc, irq);
+    vusb_spi_pipe_ack(udc, ep->pipe);
     UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
@@ -350,7 +352,7 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	int done, length, psz;
 	void *buf;
 
-	if (list_empty(&ep->queue))
+	if (list_empty(&ep->queue) || !ep)
 		return false;
 
 	req = list_first_entry(&ep->queue, struct vusb_req, queue);
@@ -364,22 +366,23 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
 
 	done = 0;
 	if (ep->ep_usb.caps.dir_in) {
 		prefetch(buf);
-		//pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
+	  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
+		//UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 		udc->spitransfer[0] = req->ep->port;
 		udc->spitransfer[1] = req->ep->pipe;
 		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
 		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
 		if (length < psz) {
-		UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 			done = 1;
 		}
-	}
-	if (ep->ep_usb.caps.dir_out) {
+	} else
+	if (ep->ep_usb.caps.dir_out && !ep->ep_usb.caps.type_control) {
+		pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
+		UDCVDBG(udc, "vusb_do_data done out, name: %s\n", ep->name);
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		length = min(length, psz);
 		prefetchw(buf);
@@ -550,10 +553,12 @@ static int vusb_thread_data(struct vusb_udc *udc)
     if (hweight32(udc->PIPEIN)) {
 			u8 irq = _bf_ffsl(udc->PIPEIN);
 			struct vusb_ep* ep = vusb_get_ep(udc, irq);
-			//UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
-			vusb_do_data(udc, ep);
-			udc->PIPEIN &= ~irq;
-			return true;
+			if (ep && irq == ep->pipe) {
+				//UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
+				vusb_do_data(udc, ep);
+				udc->PIPEIN &= ~irq;
+				return true;
+			}
     }
   }
 	return false;
@@ -620,8 +625,7 @@ static int vusb_thread(void *dev_id)
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {
 			  struct vusb_ep *ep = &udc->ep[i];
-        if (spi_vusb_enable(ep))
-        {
+        if (spi_vusb_enable(ep)) {
           loop_again = 1;
         }
 			  if (spi_vusb_stall(ep))

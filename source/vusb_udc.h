@@ -241,8 +241,10 @@ struct vusb_udc {
 
   /* MCU irq data */
   vusb_req_map_t irq_map;
+  
   /* USB irqs */
   u32 PIPEIN; // IN for the mcu
+  u32 PIPE_ENABLE;  // enable a pipe
 
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;

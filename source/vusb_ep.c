@@ -55,11 +55,12 @@ static int _vusb_ep_enable(struct vusb_ep* ep, const struct usb_endpoint_descrip
 {
   unsigned int maxp = usb_endpoint_maxp(desc);
   unsigned long flags;
+  struct vusb_udc* udc = ep->udc;
 
   spin_lock_irqsave(&ep->lock, flags);
   ep->ep_usb.desc = desc;
   ep->ep_usb.maxpacket = maxp;
-
+  udc->PIPE_ENABLE = BIT(ep->pipe);
   ep->todo &= ~ENABLE_EP;
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
