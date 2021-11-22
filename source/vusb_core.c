@@ -368,9 +368,10 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	}
 
 	done = 0;
+	// EP control and interrupt EP
 	if (ep->ep_usb.caps.dir_in) {
+	  //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "vusb_do_data - IN");
 		prefetch(buf);
-	  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
 		//UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 		udc->spitransfer[0] = req->ep->port;
 		udc->spitransfer[1] = req->ep->pipe;
@@ -380,9 +381,10 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 			done = 1;
 		}
 	} else
+	// EP interrupt OUT
 	if (ep->ep_usb.caps.dir_out && !ep->ep_usb.caps.type_control) {
-		pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
-		UDCVDBG(udc, "vusb_do_data done out, name: %s\n", ep->name);
+		//pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "vusb_do_data - OUT");
+		//UDCVDBG(udc, "vusb_do_data done out, name: %s\n", ep->name);
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		length = min(length, psz);
 		prefetchw(buf);
@@ -553,8 +555,8 @@ static int vusb_thread_data(struct vusb_udc *udc)
     if (hweight32(udc->PIPEIN)) {
 			u8 irq = _bf_ffsl(udc->PIPEIN);
 			struct vusb_ep* ep = vusb_get_ep(udc, irq);
-			if (ep && irq == ep->pipe) {
-				//UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
+			if (ep && irq == ep->pipe && !ep->ep_usb.caps.type_control) {
+				UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
 				vusb_do_data(udc, ep);
 				udc->PIPEIN &= ~irq;
 				return true;
@@ -620,7 +622,8 @@ static int vusb_thread(void *dev_id)
 
 		/* get done with the EP0 ZLP */
 		struct vusb_ep* ep = vusb_get_ep(udc, 2);
-		vusb_do_data(udc, ep);
+		if (ep->ep_usb.caps.type_control)
+			vusb_do_data(udc, ep);
 
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {
