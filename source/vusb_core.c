@@ -308,9 +308,9 @@ void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrl
 	}
   //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
 	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
-    UDCVDBG(udc, "setup error: Type: %x Request: %x\n", setup.bRequestType, setup.bRequest);
+    //UDCVDBG(udc, "setup error: Type: %x Request: %x\n", setup.bRequestType, setup.bRequest);
     // print the setup packet which leads to the error
-    pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_ERROR, NULL);
+    pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_ERROR, "setup error");
   	//	/* Stall EP0 */
     //UDCVDBG(udc, "Stall EP0 %x\n", udc->gadget);
     //	//spi_wr8(udc, VUSB_REG_EPSTALLS,
@@ -362,7 +362,10 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
+	if (ep->ep_usb.caps.dir_in && length < 3) {
+		pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
+		UDCVDBG(udc, "***** vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
+	}
 
 	done = 0;
 	if (ep->ep_usb.caps.dir_in) {
@@ -373,7 +376,7 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
 		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
 		if (length < psz) {
-		UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
+		//UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 			done = 1;
 		}
 	}
