@@ -274,7 +274,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   rc = _vusb_write_buffer(udc, reg, buffer, length);
   
   spibuffer[0] = false;
-  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  //_vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
 
   return rc;
 }
