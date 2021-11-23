@@ -516,7 +516,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 					return true;
 				}
 				else {
-					UDCVDBG(udc, "vusb_thread_data error ep: %x, idx:%d, seqnr: %d\n", ep, (u8)cmd->data[0], seqnr);
+					UDCVDBG(udc, "vusb_thread_data error ep: %x, idx:%d\n", ep, (u8)cmd->data[0]);
 				}
 			}
 			UDCVDBG(udc, "USB-Pipe vusb_thread_data read error\n");
