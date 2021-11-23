@@ -308,8 +308,8 @@ void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
-void vusb_handle_setup(struct vusb_udc* udc, u8 irq, struct usb_ctrlrequest setup);
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
+void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
 
 #endif /* __VUSB_UDC_H */

@@ -31,12 +31,19 @@
 static int wakeup_flag = 0;
 static ktime_t wait_endtime;
 
+
+void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port)
+{
+  udc->spitransfer[0] = '1';
+  udc->spitransfer[1] = udc->spitransfer[0];
+  vusb_write_buffer(udc, VUSB_REG_PORT_ATTACH, udc->spitransfer, sizeof(u8) * 2);
+}
+
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq)
 {
   udc->spitransfer[0] = REG_PIPEIRQ;
   *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
   vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
-
 }
 
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
