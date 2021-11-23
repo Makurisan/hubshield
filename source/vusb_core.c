@@ -491,21 +491,24 @@ static int vusb_thread_data(struct vusb_udc *udc)
         spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
         //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
         struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
-        if (ep->ep_usb.caps.type_control) {
-          struct usb_ctrlrequest setup;
-          memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
-          //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
-          vusb_handle_setup(udc, irq, setup);
-        }
-        else {
-					// comes from the mcu and must be processed
-          pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
-          //UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
-        }
-        // clear the irq we just processed
+				if (ep)	{
+					if (ep->ep_usb.caps.type_control) {
+						struct usb_ctrlrequest setup;
+						memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
+						//pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
+						vusb_handle_setup(udc, irq, setup);
+					}
+					else {
+						// comes from the mcu and must be processed
+						pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
+						//UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
+					}
+				}
+				// clear the irq we just processed
         udc->irq_map.PIPIRQ &= ~irq;
+				return true;
       }
-      return true;
+			UDCVDBG(udc, "**************** USB-Pipe get error: %x\n", ep->pipe);
     }
   }
 
