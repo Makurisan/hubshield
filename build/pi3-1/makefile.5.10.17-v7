@@ -3,7 +3,7 @@ obj-m  := v-hub.o
 v-hub-objs := mpack.o vusb_mpack.o vusb_core.o vusb_udc.o vusb_spi.o  vusb_ep.o vusb_helper.o vusb_chrdev.o
 
 KERNEL_DIR ?= ~/rpi/linux-5.10.17-v7
-KBUILD_CFLAGS   += -g
+#KBUILD_CFLAGS   += -g
 #KBUILD_LDFLAGS  += -g
 
 all:
