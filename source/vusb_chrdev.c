@@ -122,7 +122,7 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
             udc->transfer[1] = data[i+1];
         }
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
-        msleep_interruptible(100);
+        //msleep_interruptible(100);
         break;
       }
     }
