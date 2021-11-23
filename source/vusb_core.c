@@ -525,6 +525,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~URESIRQ;
+		vusb_spi_pipe_attach(udc, 1);
     return true;
   }
 

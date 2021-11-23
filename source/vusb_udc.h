@@ -311,5 +311,6 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
 void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
+void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port);
 
 #endif /* __VUSB_UDC_H */
