@@ -270,10 +270,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setup)
+void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrlrequest setup)
 {
-  struct vusb_ep* ep = vusb_get_ep(udc, irq);
-
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
 	udc->setup.wIndex = cpu_to_le16(setup.wIndex);
@@ -297,11 +295,11 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 		}
     // ack setaddress
     vusb_spi_pipe_ack(udc, ep->pipe);
-    UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
+    UDCVDBG(udc, "Assigned Address=%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe/idx:%d\n", udc->setup.wValue, irq);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
     /* Requests with no data phase, status phase from udc */
 		if ((udc->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -310,7 +308,7 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 	default:
 		break;
 	}
-  //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
+  UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
 	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
     UDCVDBG(udc, "setup error: Type: %x Request: %x\n", setup.bRequestType, setup.bRequest);
     // print the setup packet which leads to the error
@@ -370,7 +368,7 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	done = 0;
 	// EP control and interrupt EP
 	if (ep->ep_usb.caps.dir_in) {
-	  //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "vusb_do_data - IN");
+	  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "vusb_do_data - IN");
 		prefetch(buf);
 		//UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 		udc->spitransfer[0] = req->ep->port;
@@ -464,7 +462,8 @@ static int vusb_thread_data(struct vusb_udc *udc)
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false; 
   }
-  //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ, NULL);
+
+	//pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ, NULL);
   memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 
   u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
@@ -479,40 +478,51 @@ static int vusb_thread_data(struct vusb_udc *udc)
     if ((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
       clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
     }
+		//UDCVDBG(udc, "USB-Pipe setup get 1.1 irqs: %x\n", pipeirq);
 
     // check if a bit is set
     if (hweight32(pipeirq)) {
       u8 irq = _bf_ffsl(pipeirq);
-      struct vusb_ep* ep = vusb_get_ep(udc, irq);     
 
-			udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
-
+			vusb_spi_clear_pipe_irq(udc, irq);
+			struct vusb_ep* ep = vusb_get_ep(udc, irq);     
+			UDCVDBG(udc, "USB-Pipe setup get 1.2 ep:%x irq: %d\n", ep, irq);
       //read the setup data
-      udc->spitransfer[0] = ep->port; // octopus port
-      udc->spitransfer[1] = ep->pipe; // octopus pipe
-      if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, 1 + sizeof(u8) * 8)) {
+			//u8 seqnr = udc->spi_seqnr++;
+      udc->spitransfer[0] = 1; // ep->port octopus port
+			udc->spitransfer[1] = irq; // ep->pipe octopus pipe
+			if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, 1 + sizeof(u8) * 8)) {
         spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
-        //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
-        struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
-        if (ep->ep_usb.caps.type_control) {
-          struct usb_ctrlrequest setup;
-          memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
-          //pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
-          vusb_handle_setup(udc, irq, setup);
-        }
-        else {
-					// comes from the mcu and must be processed
-          pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
-          //UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
-        }
-        // clear the irq we just processed
-        udc->irq_map.PIPIRQ &= ~irq;
-      }
-      return true;
-    }
-  }
+				struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
+				if (!ep)	{
+					//UDCVDBG(udc, "vusb_thread_data 1.3 ep: %x, idx:%d, seqnr: %d\n", ep, (u8)cmd->data[0], seqnr);
+					pr_hex_mark(udc->spitransfer, sizeof(u8) * 8 + 1, PRINTF_READ, "EP Error");
+				}
+				// irq must be identical, fatal error if not
+				if (ep ) { // && (u8)cmd->data[0] == irq
+					if (ep->ep_usb.caps.type_control) {
+						struct usb_ctrlrequest setup;
+						memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
+						pr_hex_mark((void*)&setup, sizeof(u8) * 8, PRINTF_READ, "Setup Packet");
+						vusb_handle_setup(udc, ep, setup);
+					}
+					else {
+						// comes from the mcu and must be processed
+						pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
+						UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
+					}
+					// clear the irq we just processed
+					udc->irq_map.PIPIRQ &= ~irq;
+					return true;
+				}
+				else {
+					UDCVDBG(udc, "vusb_thread_data error ep: %x, idx:%d, seqnr: %d\n", ep, (u8)cmd->data[0], seqnr);
+				}
+			}
+			UDCVDBG(udc, "USB-Pipe vusb_thread_data read error\n");
+			return false;
+		}
+	}
 
   if (usbirq & SRESIRQ) {
     UDCVDBG(udc, "USB-Reset start\n");
@@ -529,6 +539,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~URESIRQ;
+		//vusb_spi_pipe_attach(udc, 1);
     return true;
   }
 
@@ -545,7 +556,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
   // firmware version auslesen, is chip compatible
     udc->spitransfer[1] = SOFTCONT;
     vusb_write_buffer(udc, VUSB_REG_SET, udc->spitransfer, 2);
-    return true;
+			return true;
   }
 
  // write ep IN to the MCU 

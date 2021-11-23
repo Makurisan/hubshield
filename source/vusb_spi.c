@@ -31,12 +31,29 @@
 static int wakeup_flag = 0;
 static ktime_t wait_endtime;
 
+void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port)
+{
+  udc->spitransfer[0] = '1';
+  udc->spitransfer[1] = udc->spitransfer[0];
+  vusb_write_buffer(udc, VUSB_REG_PORT_ATTACH, udc->spitransfer, sizeof(u8)*2);
+}
+
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq)
 {
   udc->spitransfer[0] = REG_PIPEIRQ;
   *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
   vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+}
 
+int vusb_spi_clear_pipe_irq(struct vusb_udc* udc, u8 irq)
+{
+  udc->spitransfer[0] = REG_PIPEIRQ;
+  *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
+  if (vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32))) {
+    udc->irq_map.PIPIRQ &= ~irq;
+    return true;
+  }
+  return false;
 }
 
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)
@@ -68,14 +85,12 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   struct spi_transfer	tr;
   struct spi_message	m;
   u8 cmd_reg;
-  u8 tx[256];
 
   spi_message_init(&m);
   memset(&tr, 0, sizeof(tr));
 
 #ifndef READ_ONE
-  memset(tx, 0xee, 255);
-  tr.tx_buf = tx;
+  tr.tx_buf = NULL;
   tr.rx_buf = buffer;
   tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
 
@@ -167,7 +182,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   int rc1=0, rc2=0, rc3=0;
-  mutex_lock_interruptible(&udc->spi_read_mutex);
+  //mutex_lock_interruptible(&udc->spi_read_mutex);
 
 #ifdef TRY_FAILED
   if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length, 0)) <= 0) {
@@ -185,9 +200,10 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 #else
   rc1 = _vusb_read_buffer(udc, reg, buffer, length));
 #endif // DEBUG
-  mutex_unlock(&udc->spi_read_mutex);
+  //mutex_unlock(&udc->spi_read_mutex);
   return rc1;
 }
+static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 
 static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length, u8 showpart)
 {
@@ -197,7 +213,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
 
   u8 spibuffer[2];
   spibuffer[0] = true;
-  vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  //_vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8)*2);
 
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
@@ -241,12 +257,11 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
     }
   }
   spibuffer[0] = false;
-  vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  //_vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8)*2);
 
   return rc;
 }
 
-static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
@@ -254,7 +269,7 @@ int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 
   u8 spibuffer[2];
   spibuffer[0] = true;
-  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  //_vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
 
   rc = _vusb_write_buffer(udc, reg, buffer, length);
   
