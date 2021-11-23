@@ -268,10 +268,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setup)
+void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrlrequest setup)
 {
-  struct vusb_ep* ep = vusb_get_ep(udc, irq);
-
 	udc->setup = setup;
 	udc->setup.wValue = cpu_to_le16(setup.wValue);
 	udc->setup.wIndex = cpu_to_le16(setup.wIndex);
@@ -294,12 +292,12 @@ void vusb_handle_setup(struct vusb_udc *udc, u8 irq, struct usb_ctrlrequest setu
 			break;
 		}
     // ack setaddress
-    vusb_spi_pipe_ack(udc, irq);
-    UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, irq);
+    vusb_spi_pipe_ack(udc, ep->pipe);
+    UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, ep->pipe);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe/idx:%d\n", udc->setup.wValue, irq);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe/idx:%d\n", udc->setup.wValue, ep->pipe);
     /* Requests with no data phase, status phase from udc */
 		if ((udc->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -496,7 +494,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 						struct usb_ctrlrequest setup;
 						memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
 						//pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
-						vusb_handle_setup(udc, irq, setup);
+						vusb_handle_setup(udc, ep, setup);
 					}
 					else {
 						// comes from the mcu and must be processed
