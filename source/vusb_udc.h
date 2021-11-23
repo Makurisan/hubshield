@@ -251,6 +251,8 @@ struct vusb_udc {
   int mcu_reset;
   int spi_datrdy;
   int mcu_irq;
+  u8 spi_seqnr;
+
 
   struct mutex spi_read_mutex;
   struct mutex spi_write_mutex;
@@ -310,8 +312,10 @@ void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
-void vusb_handle_setup(struct vusb_udc* udc, u8 irq, struct usb_ctrlrequest setup);
+void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
+int vusb_spi_clear_pipe_irq(struct vusb_udc* udc, u8 irq);
+void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port);
 
 #endif /* __VUSB_UDC_H */
