@@ -174,7 +174,6 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 {
   int rc1=0, rc2=0, rc3=0;
-  mutex_lock_interruptible(&udc->spi_read_mutex);
 
 #ifdef TRY_FAILED
   if ((rc1 = _vusb_read_buffer(udc, reg, buffer, length, 0)) <= 0) {
@@ -184,7 +183,6 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
       UDCVDBG(udc, "mcu second read error: %d, %d\n", rc1, rc2);
       if ((rc3 = _vusb_read_buffer(udc, reg, buffer, length, 1)) <= 0) {
         UDCVDBG(udc, "mcu third read error: %d, %d, %d\n", rc1, rc2, rc3);
-        mutex_unlock(&udc->spi_read_mutex);
         return rc3;
       }
     }
@@ -192,7 +190,6 @@ int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
 #else
   rc1 = _vusb_read_buffer(udc, reg, buffer, length));
 #endif // DEBUG
-  mutex_unlock(&udc->spi_read_mutex);
   return rc1;
 }
 

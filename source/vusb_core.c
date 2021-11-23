@@ -752,8 +752,6 @@ static int vusb_probe(struct spi_device *spi)
 
   /* INTERRUPT spi read queue */
   init_waitqueue_head(&udc->spi_read_queue);
-  mutex_init(&udc->spi_read_mutex);
-  mutex_init(&udc->spi_write_mutex);
 
 	udc->ep0req.ep = &udc->ep[0];
 	udc->ep0req.usb_req.buf = udc->ep0buf;
