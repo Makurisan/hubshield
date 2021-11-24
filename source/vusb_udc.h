@@ -78,6 +78,7 @@ enum vusb_req_code {
 #define VUSB_REG_DEBUG            0x16
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
 #define VUSB_REG_PIPE_EP_ENABLE   0x18
+#define VUSB_REG_PIPE_MAXPKTSIZE  0x19
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
@@ -177,6 +178,8 @@ enum vusb_req_code {
 #define VUSB_MCU_EP_IN       0x01
 #define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
+
+
 // register data map
 #pragma pack(1)
 typedef struct vusb_req_map {
@@ -230,6 +233,7 @@ typedef struct vusb_spi_cmd {
 } spi_cmd_t;
 #pragma pack()
 
+
 struct vusb_udc {
 
   /* SPI master */
@@ -238,6 +242,8 @@ struct vusb_udc {
   u8* spitransfer; /*can be used*/
   u8* spiwritebuffer; /*internal usage*/
   u8* transfer;
+
+  struct workqueue_struct* qwork;
 
   /* MCU irq data */
   vusb_req_map_t irq_map;
@@ -295,6 +301,13 @@ struct vusb_udc {
 
 };
 
+
+typedef struct work_udc {
+  struct work_struct	work;
+  struct vusb_udc* udc;
+  struct vusb_ep* ep;
+}work_udc_t;
+
 int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env);
 void pr_hex_mark(const char* mem, int count, int mark, const char* label);
 void pr_hex_mark_debug(const char* mem, int count, int mark, const char* label, const char* debug);
@@ -309,5 +322,6 @@ int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
 void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
 void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port);
-
+void vusb_work_handler(struct work_struct* work);
+void vusb_work_irqhandler(struct work_struct* work);
 #endif /* __VUSB_UDC_H */

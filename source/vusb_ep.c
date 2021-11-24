@@ -47,7 +47,7 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 
   wake_up_process(udc->thread_service);
 
-  dev_dbg(udc->dev, "vusb_ep_set_halt, %sStall %s\n", stall ? "" : "Un", ep->name);
+  dev_info(udc->dev, "vusb_ep_set_halt, %sStall %s\n", stall ? "" : "Un", ep->name);
   return 0;
 }
 
@@ -75,7 +75,7 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   unsigned long flags;
 
   _vusb_ep_enable(ep, desc);
-  dev_dbg(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, attrib:%x\n",
+  dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, attrib:%x\n",
          _ep->name, desc->bEndpointAddress, desc->bmAttributes);
 
   set_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request);
@@ -120,7 +120,7 @@ static void _vusb_ep_disable(struct vusb_ep* ep)
 
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  dev_dbg(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
+  dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
 
 }
 
@@ -159,6 +159,19 @@ static void vusb_free_request(struct usb_ep* _ep, struct usb_request* _req)
   kfree(to_vusb_req(_req));
 }
 
+void vusb_work_handler(struct work_struct* work)
+{
+  work_udc_t* wk = container_of(work, struct work_udc, work);
+  dev_info(wk->udc->dev, "vusb_work_handler work %x \n", &wk->udc->ep);
+}
+
+void vusb_work_irqhandler(struct work_struct* work)
+{
+  work_udc_t* wk = container_of(work, struct work_udc, work);
+  dev_info(wk->udc->dev, "vusb_work_irqhandler work %x \n", &wk->udc->ep);
+}
+
+
 static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ignored)
 {
   struct vusb_req* req = to_vusb_req(_req);
@@ -183,10 +196,10 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
     wake_up_interruptible(&udc->service_thread_wq);
     spin_unlock_irqrestore(&udc->wq_lock, flags);
   }
-  //else {
-  //  dev_info(udc->dev, "- vusb_ep_queue %s\n", ep->name);
-  //}
-
+  else {
+    if(_req->length > 60)
+      dev_info(udc->dev, "vusb_ep_queue name: %s length: %d, status: %d\n", ep->name, _req->length, _req->status);
+  }
   return 0;
 }
 
@@ -274,6 +287,11 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d", idx);
+
+      // write the maxpacketsize
+      udc->spitransfer[1] = ep->pipe; // octopus pipe
+      udc->spitransfer[2] = 0x40;
+      vusb_write_buffer(udc, VUSB_REG_PIPE_MAXPKTSIZE, udc->spitransfer, sizeof(u8)*3);
       continue;
     }
 

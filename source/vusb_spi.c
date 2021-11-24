@@ -203,8 +203,8 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
 
   u8 spibuffer[2];
   spibuffer[0] = true;
-  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
-
+  //_vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
 
@@ -229,6 +229,7 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
   //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE, NULL);
   spi_message_add_tail(&t, &msg);
 
+// lock read mutex
   if (!spi_sync(udc->spi, &msg)) {
     ktime_t wait_starttime = ktime_get();
     u16 wait_time;
@@ -246,8 +247,10 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
       rc = -6;
     }
   }
-  spibuffer[0] = false;
-  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));
+  // unlock read mutex
+
+ /* spibuffer[0] = false;
+  _vusb_write_buffer(udc, VUSB_REG_READ_LOCK, spibuffer, sizeof(u8));*/
 
   return rc;
 }

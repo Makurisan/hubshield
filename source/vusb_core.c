@@ -83,16 +83,11 @@ static int spi_vusb_stall(struct vusb_ep *ep)
 
 	//epstalls = spi_rd8(udc, VUSB_REG_EPSTALLS);
 	if (todo == STALL) {
+		UDCVDBG(udc, "spi_vusb_stall 'STALL' request, name: %s\n", ep->name);
 		ep->halted = 1;
-		epstalls |= BIT(ep->id + 1);
 	} else {
-		u8 clrtogs;
-
+		UDCVDBG(udc, "spi_vusb_stall '!STALL' request, name: %s\n", ep->name);
 		ep->halted = 0;
-		epstalls &= ~BIT(ep->id + 1);
-		//clrtogs = spi_rd8(udc, VUSB_REG_CLRTOGS);
-		clrtogs |= BIT(ep->id + 1);
-		//spi_wr8(udc, VUSB_REG_CLRTOGS, clrtogs);
 	}
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, epstalls | ACKSTAT);
 
@@ -293,11 +288,11 @@ void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrl
 		}
     // ack setaddress
     vusb_spi_pipe_ack(udc, ep->pipe);
-    UDCVDBG(udc, "Assigned Address=%d, pipe/idx: %d\n", udc->setup.wValue, ep->pipe);
+    UDCVDBG(udc, "Assigned Address=%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe/idx:%d\n", udc->setup.wValue, ep->pipe);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
     /* Requests with no data phase, status phase from udc */
 		if ((udc->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -362,10 +357,6 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-	if (ep->ep_usb.caps.dir_in && length < 3) {
-		pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "1");
-		UDCVDBG(udc, "***** vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
-	}
 
 	done = 0;
 	if (ep->ep_usb.caps.dir_in) {
@@ -376,7 +367,6 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
 		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
 		if (length < psz) {
-		//UDCVDBG(udc, "vusb_do_data done, name: %s, length: %d psz: %d\n", ep->name, length, psz);
 			done = 1;
 		}
 	}
@@ -385,7 +375,7 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		length = min(length, psz);
 		prefetchw(buf);
 		//spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
-		if (length <= ep->ep_usb.maxpacket)
+		if (length < ep->ep_usb.maxpacket)
 			done = 1;
 	}
 
@@ -393,6 +383,9 @@ static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	if (req->usb_req.actual == req->usb_req.length)
 		done = 1;
+
+	//UDCVDBG(udc, "***** vusb_req_dodata add, name: %s, length: %d psz: %d, done:%d\n", ep->name, req->usb_req.length,
+	//	req->usb_req.actual, done);
 
 xfer_done:
 	if (done) { 
@@ -402,9 +395,11 @@ xfer_done:
 		list_del_init(&req->queue);
 		spin_unlock_irqrestore(&ep->lock, flags);
 
-		if (ep->ep_usb.caps.type_control)
+		// todo must be changed to 
+		if (ep->ep_usb.caps.dir_in)
 			vusb_spi_pipe_ack(udc, ep->pipe);
 		vusb_req_done(req, 0);
+		return false;
 	}
 	return true;
 }
@@ -620,7 +615,12 @@ static int vusb_thread(void *dev_id)
 
 		/* get done with the EP0 ZLP */
 		struct vusb_ep* ep = vusb_get_ep(udc, 2);
-		vusb_do_data(udc, ep);
+		while(vusb_do_data(udc, ep));
+
+		//if (vusb_do_data(udc, ep)) {
+		//	loop_again = 1;
+		//	goto loop;
+		//}
 
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {
@@ -760,9 +760,6 @@ static int vusb_probe(struct spi_device *spi)
 	udc->ep0req.usb_req.buf = udc->ep0buf;
 	INIT_LIST_HEAD(&udc->ep0req.queue);
 
-	/* setup Endpoints */
-	vusb_eps_init(udc);
-
   rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
   if (rc) {
     dev_err(&spi->dev, "UDC gadget could not be added\n");
@@ -770,14 +767,14 @@ static int vusb_probe(struct spi_device *spi)
   }
 
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-    sizeof(*udc->transfer), GFP_KERNEL);
+    sizeof(u8), GFP_KERNEL);
   if (!udc->transfer)
   {
     dev_err(&spi->dev, "Unable to allocate Hub transfer buffer.\n");
     return -ENOMEM;
   }
   udc->spitransfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-    sizeof(*udc->spitransfer), GFP_KERNEL);
+    sizeof(u8), GFP_KERNEL);
   if (!udc->spitransfer)
   {
     dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
@@ -826,6 +823,7 @@ static int vusb_probe(struct spi_device *spi)
     rc = -ENOMEM;
     goto err;
   }
+
 #define _RESET_PIN
 #ifdef _RESET_PIN
 #define GPIO_RESET_PIN 24
@@ -841,6 +839,9 @@ static int vusb_probe(struct spi_device *spi)
 	udc->is_selfpowered = 1;
 	udc->todo |= UDC_START;
   udc->softconnect = true;
+
+	/* setup Endpoints */
+	vusb_eps_init(udc);
 
 	usb_udc_vbus_handler(&udc->gadget, true);
 	usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
@@ -874,6 +875,28 @@ static int vusb_probe(struct spi_device *spi)
   UDCVDBG(udc, "Succesfully initialized vusb.\n");
 
   vusb_mpack_buffer(udc, 2, udc->transfer, 512);
+
+	udc->qwork = create_singlethread_workqueue("octohub");
+	
+	work_udc_t *work1;
+	work1 = kcalloc(1, sizeof(work_udc_t), GFP_KERNEL);
+	work1->udc = udc;
+	INIT_WORK(&work1->work, vusb_work_handler);
+	queue_work(udc->qwork, &work1->work);
+
+	work1 = kcalloc(1, sizeof(work_udc_t), GFP_KERNEL);
+	work1->udc = udc;
+	INIT_WORK(&work1->work, vusb_work_irqhandler);
+	queue_work(udc->qwork, &work1->work);
+
+	//INIT_WORK(&udc->vusb_work, vusb_work_handler);
+	//queue_work(udc->qwork, &udc->vusb_work);
+
+	//struct work_udc work2;
+	//work2.udc = udc;
+	//INIT_WORK_ONSTACK(&work2.work, vusb_work_irqhandler);
+	//queue_work(udc->qwork, &work2.work);
+	//UDCVDBG(udc, "********** work: %x %x\n", work->work);
 
 	return 0;
 err:
