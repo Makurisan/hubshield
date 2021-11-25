@@ -403,24 +403,46 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 {
 	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq);
 
-	//u32 pipeirq = 4;
-	//if (pipeirq) {
-	//	while (hweight32(pipeirq)) {
-	//		u32 irq = _bf_ffsl(pipeirq);
-	//		struct vusb_ep* ep = vusb_get_ep(udc, irq);
-	//		if (ep)
-	//			schedule_work(&ep->ep_wq);
-	//		pipeirq &= ~BIT(irq);
-	//	}
-	//	//UDCVDBG(udc, "--- vusb_irq_mcu_ha work %x\n", pipeirq);
-	//}
-	// read all mcu IRQs  
 	u8 transfer[48];
 	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
-		spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-		//UDCVDBG(udc, "*** vusb_irq_mcu_handler cmd: %x\n", cmd->reg);
 		vusb_req_map_t irq_map;
 		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
+
+		u8 usbirq = irq_map.USBIRQ & irq_map.USBIEN;
+		
+		if (usbirq & SRESIRQ) {
+			UDCVDBG(udc, "USB-Reset start\n");
+			transfer[0] = REG_USBIRQ;
+			transfer[1] = SRESIRQ;
+			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
+			udc->irq_map.USBIRQ &= ~SRESIRQ;
+			return;
+		}
+		if (usbirq & URESIRQ) {
+			UDCVDBG(udc, "USB-Reset end\n");
+			transfer[0] = REG_USBIRQ;
+			transfer[1] = URESIRQ;
+			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
+			udc->irq_map.USBIRQ &= ~URESIRQ;
+			//vusb_spi_pipe_attach(udc, 1);
+			return;
+		}
+		if (usbirq & HRESIRQ) {
+			UDCVDBG(udc, "System-Reset\n");
+			//msleep_interruptible(5);
+			transfer[0] = REG_USBIRQ;
+			transfer[1] = HRESIRQ;
+			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
+			udc->irq_map.USBIRQ &= ~HRESIRQ;
+			// connect the usb to the host   
+			transfer[0] = REG_CPUCTL;
+			// firmware version auslesen, is chip compatible
+			transfer[1] = SOFTCONT;
+			vusb_write_buffer(udc, VUSB_REG_SET, transfer, 2);
+			return;
+		}
+
+	// pipe handling
 		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
 		irq_map.PIPIRQ = htonl(irq_map.PIPIRQ);
 		u32 pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
@@ -536,41 +558,6 @@ static int vusb_thread_data(struct vusb_udc *udc)
       }
 			UDCVDBG(udc, "**************** USB-Pipe get error: %x\n", ep->pipe);
     }
-  }
-
-  if (usbirq & SRESIRQ) {
-    UDCVDBG(udc, "USB-Reset start\n");
-    udc->spitransfer[0] = REG_USBIRQ;
-    udc->spitransfer[1] = SRESIRQ;
-    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_map.USBIRQ &= ~SRESIRQ;
-    return true;
-  }
-
-  if (usbirq & URESIRQ) {
-    UDCVDBG(udc, "USB-Reset end\n");
-    udc->spitransfer[0] = REG_USBIRQ;
-    udc->spitransfer[1] = URESIRQ;
-    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_map.USBIRQ &= ~URESIRQ;
-		//vusb_spi_pipe_attach(udc, 1);
-    return true;
-  }
-
-  if (usbirq & HRESIRQ) {
-    UDCVDBG(udc, "System-Reset\n");
-    //msleep_interruptible(5);
-    udc->spitransfer[0] = REG_USBIRQ;
-    udc->spitransfer[1] = HRESIRQ;
-    vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
-    udc->irq_map.USBIRQ &= ~HRESIRQ;
-    // connect the usb to the host   
-    udc->spitransfer[0] = REG_CPUCTL;
-
-  // firmware version auslesen, is chip compatible
-    udc->spitransfer[1] = SOFTCONT;
-    vusb_write_buffer(udc, VUSB_REG_SET, udc->spitransfer, 2);
-    return true;
   }
 
  // write ep IN to the MCU 
