@@ -51,8 +51,16 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
   return 0;
 }
 
-static int _vusb_ep_enable(struct vusb_ep* ep, const struct usb_endpoint_descriptor* desc)
+static int _vusb_ep_enable(struct work_struct* work)
 {
+  return 0;
+}
+
+static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descriptor* desc)
+{
+  struct vusb_ep* ep = to_vusb_ep(_ep);
+  struct vusb_udc* udc = ep->udc;
+
   unsigned int maxp = usb_endpoint_maxp(desc);
   unsigned long flags;
 
@@ -64,17 +72,6 @@ static int _vusb_ep_enable(struct vusb_ep* ep, const struct usb_endpoint_descrip
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  return 0;
-}
-
-static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descriptor* desc)
-{
-  struct vusb_ep* ep = to_vusb_ep(_ep);
-  struct vusb_udc* udc = ep->udc;
-
-  unsigned long flags;
-
-  _vusb_ep_enable(ep, desc);
   dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, attrib:%x\n",
          _ep->name, desc->bEndpointAddress, desc->bmAttributes);
 
@@ -176,17 +173,12 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   // EP Interrupt processing
   if (!ep->ep_usb.caps.type_control && ep->ep_usb.caps.dir_in)
   {
-    dev_info(udc->dev, "vusb_ep_queue, name: %s pipe: %d\n", ep->name, ep->pipe);
-    udc->PIPEIN |= BIT(ep->pipe);
-    set_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request);
+    //dev_info(udc->dev, "vusb_ep_queue, name: %s pipe: %d\n", ep->name, ep->pipe);
     spin_lock_irqsave(&udc->wq_lock, flags);
-    wake_up_interruptible(&udc->service_thread_wq);
+    schedule_work(&ep->ep_wq);
     spin_unlock_irqrestore(&udc->wq_lock, flags);
   }
-  else {
-    if(_req->length > 60)
-      dev_info(udc->dev, "vusb_ep_queue name: %s length: %d, status: %d\n", ep->name, _req->length, _req->status);
-  }
+
   return 0;
 }
 
@@ -255,7 +247,26 @@ static void vusb_ep_irq_process(struct work_struct* work)
   dev_info(ep->udc->dev, "vusb_ep_irq_process ep: %s \n", ep->name);
 
   if (ep->ep_usb.caps.type_control) {
-
+    u8 transfer[24];
+    transfer[0] = ep->port; // octopus port
+    transfer[1] = ep->pipe; // octopus pipe
+    if (vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + sizeof(struct usb_ctrlrequest))) {
+      spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+      struct vusb_ep* _ep = vusb_get_ep(ep->udc, (u8)cmd->data[0]);
+      if (_ep == ep && ep->ep_usb.caps.type_control) {
+        struct usb_ctrlrequest setup;
+        memmove(&setup, &cmd->data[sizeof(u8)], sizeof(struct usb_ctrlrequest));
+        // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
+        vusb_handle_setup(ep->udc, ep, setup);
+        // process the data
+        while (vusb_do_data(ep->udc, ep));
+      }
+      else {
+        // comes from the mcu and must be processed
+        pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_process");
+        // UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
+      }
+    }
   }
   else
   if (ep->ep_usb.caps.dir_out) {
@@ -263,7 +274,7 @@ static void vusb_ep_irq_process(struct work_struct* work)
   }
   else
   if (ep->ep_usb.caps.dir_in) {
-
+    vusb_do_data(ep->udc, ep);
   }
 
 }

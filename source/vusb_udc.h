@@ -175,7 +175,6 @@ enum vusb_req_code {
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
 #define VUSB_MCU_IRQ_GPIO    0x00
-#define VUSB_MCU_EP_IN       0x01
 #define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
 
@@ -248,12 +247,6 @@ struct vusb_udc {
   struct mutex spi_write_mutex;
 
   struct work_struct	vusb_irq_wq;
-
-  /* MCU irq data */
-  vusb_req_map_t irq_map;
-  /* USB irqs */
-  u32 PIPEIN; // IN for the mcu
-
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;
   int mcu_reset;
@@ -328,4 +321,6 @@ void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrl
 void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port);
 void vusb_work_handler(struct work_struct* work);
 void vusb_work_irqhandler(struct work_struct* work);
+int vusb_do_data(struct vusb_udc* udc, struct vusb_ep* ep);
+
 #endif /* __VUSB_UDC_H */

@@ -329,7 +329,7 @@ void vusb_req_done(struct vusb_req *req, int status)
 		req->usb_req.complete(&ep->ep_usb, &req->usb_req);
 }
 
-static int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
+int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 {
 	struct vusb_req *req;
 	int done, length, psz;
@@ -405,17 +405,35 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 
 	u8 transfer[48];
 	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
+
 		vusb_req_map_t irq_map;
 		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
-
 		u8 usbirq = irq_map.USBIRQ & irq_map.USBIEN;
-		
+
+	// pipe handling
+		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
+		irq_map.PIPIRQ = htonl(irq_map.PIPIRQ);
+		u32 pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
+		if (pipeirq) {
+			// clear pipeirq flags
+			transfer[0] = REG_PIPEIRQ;
+			*(u32*)&transfer[1] = htonl(irq_map.PIPIRQ);
+			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, sizeof(u8) + sizeof(u32));
+			// process the irqs
+			while (hweight32(pipeirq)) {
+				u32 irq = _bf_ffsl(pipeirq);
+				struct vusb_ep* ep = vusb_get_ep(udc, irq);
+				if (ep)
+					schedule_work(&ep->ep_wq);
+				pipeirq &= ~BIT(irq);
+			}
+		}
+
 		if (usbirq & SRESIRQ) {
 			UDCVDBG(udc, "USB-Reset start\n");
 			transfer[0] = REG_USBIRQ;
 			transfer[1] = SRESIRQ;
 			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
-			udc->irq_map.USBIRQ &= ~SRESIRQ;
 			return;
 		}
 		if (usbirq & URESIRQ) {
@@ -423,7 +441,6 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			transfer[0] = REG_USBIRQ;
 			transfer[1] = URESIRQ;
 			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
-			udc->irq_map.USBIRQ &= ~URESIRQ;
 			//vusb_spi_pipe_attach(udc, 1);
 			return;
 		}
@@ -433,7 +450,6 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			transfer[0] = REG_USBIRQ;
 			transfer[1] = HRESIRQ;
 			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
-			udc->irq_map.USBIRQ &= ~HRESIRQ;
 			// connect the usb to the host   
 			transfer[0] = REG_CPUCTL;
 			// firmware version auslesen, is chip compatible
@@ -442,20 +458,6 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			return;
 		}
 
-	// pipe handling
-		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
-		irq_map.PIPIRQ = htonl(irq_map.PIPIRQ);
-		u32 pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
-		if (pipeirq) {
-			while (hweight32(pipeirq)) {
-				u32 irq = _bf_ffsl(pipeirq);
-				struct vusb_ep* ep = vusb_get_ep(udc, irq);
-				if (ep)
-					schedule_work(&ep->ep_wq);
-				pipeirq &= ~BIT(irq);
-			}
-			// clear pipeirq flags
-		}
 	}
 
 }
@@ -474,19 +476,9 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip)
     {
-      spin_lock_irqsave(&udc->lock, flags);
-      if ((udc->todo & ENABLE_IRQ) == 0) {
-        disable_irq_nosync(udc->mcu_irq);
-        udc->todo |= ENABLE_IRQ;
-      }
-      spin_unlock_irqrestore(&udc->lock, flags);
-
-			set_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
       spin_lock_irqsave(&udc->wq_lock, flags);
-      wake_up_interruptible(&udc->service_thread_wq);
 			schedule_work(&udc->vusb_irq_wq);
 			spin_unlock_irqrestore(&udc->wq_lock, flags);
-
     }
   }
   return iret;
@@ -494,85 +486,6 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 
 static int vusb_thread_data(struct vusb_udc *udc)
 {
-	bool ret = false;
-  int rc;
-
-  // read only if something is to do
-  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request) == 0 &&
-    test_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request) == 0) {
-    return false;
-  }
-
-  // read all mcu IRQs  
-  if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
-    return false; 
-  }
-  //pr_hex_mark(udc->spitransfer, REG_IRQ_ELEMENTS + VUSB_SPI_HEADER, PRINTF_READ, NULL);
-  memmove(&udc->irq_map, udc->spitransfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
-
-  u8 usbirq = udc->irq_map.USBIRQ & udc->irq_map.USBIEN;
-  // write with network byte order, big endian
-  udc->irq_map.PIPIEN = htonl(udc->irq_map.PIPIEN);
-  udc->irq_map.PIPIRQ = htonl(udc->irq_map.PIPIRQ);
-  u32 pipeirq = udc->irq_map.PIPIEN & udc->irq_map.PIPIRQ;
-
-  // irq raised
-  if (test_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request)) {
-    // count the bits, clear only if we have one to do
-    if ((hweight32(pipeirq) + hweight32(usbirq)) == 1) {
-      clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
-    }
-
-    // check if a bit is set
-    if (hweight32(pipeirq)) {
-      u8 irq = (_bf_ffsl(pipeirq));
-      struct vusb_ep* ep = vusb_get_ep(udc, irq);     
-
-			udc->spitransfer[0] = REG_PIPEIRQ;
-      *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-      vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, sizeof(u8) + sizeof(u32));
-
-      //read the setup data
-      udc->spitransfer[0] = ep->port; // octopus port
-      udc->spitransfer[1] = ep->pipe; // octopus pipe
-      if (vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, 1 + sizeof(u8) * 8)) {
-        spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
-        //UDCVDBG(udc, "USB-Pipe setup get index: %x\n", cmd->length);
-        struct vusb_ep* ep = vusb_get_ep(udc, (u8)cmd->data[0]);
-				if (ep)	{
-					if (ep->ep_usb.caps.type_control) {
-						struct usb_ctrlrequest setup;
-						memmove(&setup, udc->spitransfer + VUSB_SPI_HEADER + sizeof(u8), sizeof(struct usb_ctrlrequest));
-						//pr_hex_mark(udc->spitransfer, sizeof(u8) * 8, PRINTF_READ, ep->name);
-						vusb_handle_setup(udc, ep, setup);
-					}
-					else {
-						// comes from the mcu and must be processed
-						pr_hex_mark_debug(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "2");
-						//UDCVDBG(udc, "USB-Pipe out, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
-					}
-				}
-				// clear the irq we just processed
-        udc->irq_map.PIPIRQ &= ~BIT(irq);
-				return true;
-      }
-			UDCVDBG(udc, "**************** USB-Pipe get error: %x\n", ep->pipe);
-    }
-  }
-
- // write ep IN to the MCU 
-	// change if more than one port is used
-  if (test_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request)) {
-    clear_bit(VUSB_MCU_EP_IN, (void*)&udc->service_request);
-    if (hweight32(udc->PIPEIN)) {
-			u8 irq = _bf_ffsl(udc->PIPEIN);
-			struct vusb_ep* ep = vusb_get_ep(udc, irq);
-			//UDCVDBG(udc, "vusb_do_data, pipe: %d, irq: %d, name: %s\n", ep->pipe, irq, ep->name);
-			vusb_do_data(udc, ep);
-			udc->PIPEIN &= ~irq;
-			return true;
-    }
-  }
 	return false;
 }
 
@@ -619,25 +532,6 @@ static int vusb_thread(void *dev_id)
  		/* If disconnected */
 		if (!udc->softconnect)
 			goto loop;
-
-		//if (vusb_start(udc)) {
-		//	loop_again = 1;
-		//	goto loop;
-		//}
-
-		if (vusb_thread_data(udc)) {
-			loop_again = 1;
-			goto loop;
-		}
-
-		/* get done with the EP0 ZLP */
-		struct vusb_ep* ep = vusb_get_ep(udc, 2);
-		while(vusb_do_data(udc, ep));
-
-		//if (vusb_do_data(udc, ep)) {
-		//	loop_again = 1;
-		//	goto loop;
-		//}
 
     if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
       for (i = 1; i < VUSB_MAX_EPS; i++) {
