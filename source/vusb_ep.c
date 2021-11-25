@@ -159,19 +159,6 @@ static void vusb_free_request(struct usb_ep* _ep, struct usb_request* _req)
   kfree(to_vusb_req(_req));
 }
 
-void vusb_work_handler(struct work_struct* work)
-{
-  work_udc_t* wk = container_of(work, struct work_udc, work);
-  dev_info(wk->udc->dev, "vusb_work_handler work %x \n", &wk->udc->ep);
-}
-
-void vusb_work_irqhandler(struct work_struct* work)
-{
-  work_udc_t* wk = container_of(work, struct work_udc, work);
-  dev_info(wk->udc->dev, "vusb_work_irqhandler work %x \n", &wk->udc->ep);
-}
-
-
 static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ignored)
 {
   struct vusb_req* req = to_vusb_req(_req);
@@ -242,7 +229,7 @@ static const struct usb_ep_ops vusb_ep_ops = {
 static const struct usb_endpoint_descriptor ep0_desc = {
   .bEndpointAddress = USB_DIR_OUT,
   .bmAttributes = USB_ENDPOINT_XFER_CONTROL,
-  .wMaxPacketSize = cpu_to_le16(VUSB_EP_MAX_PACKET),
+  .wMaxPacketSize = cpu_to_le16(VUSB_EP_MAX_PACKET_LIMIT),
 };
 
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
@@ -257,6 +244,30 @@ struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
   }
   return 0;
 }
+
+/// <summary>
+/// add comment may run in parallel
+/// </summary>
+/// <param name="work"></param>
+static void vusb_ep_irq_process(struct work_struct* work)
+{
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, ep_wq);
+  dev_info(ep->udc->dev, "vusb_ep_irq_process ep: %s \n", ep->name);
+
+  if (ep->ep_usb.caps.type_control) {
+
+  }
+  else
+  if (ep->ep_usb.caps.dir_out) {
+
+  }
+  else
+  if (ep->ep_usb.caps.dir_in) {
+
+  }
+
+}
+
 
 void vusb_eps_init(struct vusb_udc* udc)
 {
@@ -277,7 +288,8 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->maxpacket = 0;
     ep->ep_usb.name = ep->name;
     ep->ep_usb.ops = &vusb_ep_ops;
-    usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET);
+    INIT_WORK(&ep->ep_wq, vusb_ep_irq_process);
+    usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
     ep->pipe = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
 
     if (idx == 0) { /* For EP0 */
@@ -287,11 +299,6 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d", idx);
-
-      // write the maxpacketsize
-      udc->spitransfer[1] = ep->pipe; // octopus pipe
-      udc->spitransfer[2] = 0x40;
-      vusb_write_buffer(udc, VUSB_REG_PIPE_MAXPKTSIZE, udc->spitransfer, sizeof(u8)*3);
       continue;
     }
 

@@ -151,7 +151,7 @@ enum vusb_req_code {
 
 
 #define VUSB_MAX_EPS		4
-#define VUSB_EP_MAX_PACKET		64  /* Same for all Endpoints */
+#define VUSB_EP_MAX_PACKET_LIMIT	64 /* Same for all Endpoints */
 #define VUSB_EPNAME_SIZE		16  /* Buffer size for endpoint name */
 
 #define ENABLE_IRQ	BIT(0)
@@ -202,6 +202,7 @@ struct vusb_req {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
+  struct work_struct ep_wq;
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int pipe; // pipe index on MCU
@@ -243,7 +244,10 @@ struct vusb_udc {
   u8* spiwritebuffer; /*internal usage*/
   u8* transfer;
 
-  struct workqueue_struct* qwork;
+  struct mutex spi_read_mutex;
+  struct mutex spi_write_mutex;
+
+  struct work_struct	vusb_irq_wq;
 
   /* MCU irq data */
   vusb_req_map_t irq_map;

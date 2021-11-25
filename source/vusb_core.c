@@ -132,14 +132,6 @@ static void __vusb_start(struct vusb_udc *udc)
 	msleep_interruptible(5);
 	//spi_wr8(udc, VUSB_REG_USBCTL, 0);
 
-	/* Poll for OSC to stabilize */
-	//while (1) {
-	//	//val = spi_rd8(udc, VUSB_REG_USBIRQ);
-	//	if (val & OSCOKIRQ)
-	//		break;
-	//	cond_resched();
-	//}
-
 	/* Enable PULL-UP only when Vbus detected */
 	//val = spi_rd8(udc, VUSB_REG_USBCTL);
 	//val |= VBGATE | CONNECT;
@@ -407,6 +399,45 @@ xfer_done:
 #define REG_USBIRQ	3
 #define REG_IRQ_ELEMENTS 12
 
+static void vusb_irq_mcu_handler(struct work_struct* work)
+{
+	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq);
+
+	//u32 pipeirq = 4;
+	//if (pipeirq) {
+	//	while (hweight32(pipeirq)) {
+	//		u32 irq = _bf_ffsl(pipeirq);
+	//		struct vusb_ep* ep = vusb_get_ep(udc, irq);
+	//		if (ep)
+	//			schedule_work(&ep->ep_wq);
+	//		pipeirq &= ~BIT(irq);
+	//	}
+	//	//UDCVDBG(udc, "--- vusb_irq_mcu_ha work %x\n", pipeirq);
+	//}
+	// read all mcu IRQs  
+	u8 transfer[48];
+	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
+		spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+		//UDCVDBG(udc, "*** vusb_irq_mcu_handler cmd: %x\n", cmd->reg);
+		vusb_req_map_t irq_map;
+		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
+		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
+		irq_map.PIPIRQ = htonl(irq_map.PIPIRQ);
+		u32 pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
+		if (pipeirq) {
+			while (hweight32(pipeirq)) {
+				u32 irq = _bf_ffsl(pipeirq);
+				struct vusb_ep* ep = vusb_get_ep(udc, irq);
+				if (ep)
+					schedule_work(&ep->ep_wq);
+				pipeirq &= ~BIT(irq);
+			}
+			// clear pipeirq flags
+		}
+	}
+
+}
+
 // read all mcu IRQs    
 static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 {
@@ -428,11 +459,11 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
       }
       spin_unlock_irqrestore(&udc->lock, flags);
 
-      set_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
-
+			set_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
       spin_lock_irqsave(&udc->wq_lock, flags);
       wake_up_interruptible(&udc->service_thread_wq);
-      spin_unlock_irqrestore(&udc->wq_lock, flags);
+			schedule_work(&udc->vusb_irq_wq);
+			spin_unlock_irqrestore(&udc->wq_lock, flags);
 
     }
   }
@@ -451,7 +482,6 @@ static int vusb_thread_data(struct vusb_udc *udc)
   }
 
   // read all mcu IRQs  
-  memset(udc->spitransfer, 0, REG_IRQ_ELEMENTS);
   if( 0 == vusb_read_buffer(udc, VUSB_REG_IRQ_GET, udc->spitransfer, REG_IRQ_ELEMENTS)) {
     return false; 
   }
@@ -473,7 +503,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 
     // check if a bit is set
     if (hweight32(pipeirq)) {
-      u8 irq = _bf_ffsl(pipeirq);
+      u8 irq = (_bf_ffsl(pipeirq));
       struct vusb_ep* ep = vusb_get_ep(udc, irq);     
 
 			udc->spitransfer[0] = REG_PIPEIRQ;
@@ -501,7 +531,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
 					}
 				}
 				// clear the irq we just processed
-        udc->irq_map.PIPIRQ &= ~irq;
+        udc->irq_map.PIPIRQ &= ~BIT(irq);
 				return true;
       }
 			UDCVDBG(udc, "**************** USB-Pipe get error: %x\n", ep->pipe);
@@ -523,7 +553,7 @@ static int vusb_thread_data(struct vusb_udc *udc)
     udc->spitransfer[1] = URESIRQ;
     vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, udc->spitransfer, 2);
     udc->irq_map.USBIRQ &= ~URESIRQ;
-		vusb_spi_pipe_attach(udc, 1);
+		//vusb_spi_pipe_attach(udc, 1);
     return true;
   }
 
@@ -755,10 +785,15 @@ static int vusb_probe(struct spi_device *spi)
 
   /* INTERRUPT spi read queue */
   init_waitqueue_head(&udc->spi_read_queue);
+	mutex_init(&udc->spi_read_mutex);
+	mutex_init(&udc->spi_write_mutex);
 
 	udc->ep0req.ep = &udc->ep[0];
 	udc->ep0req.usb_req.buf = udc->ep0buf;
 	INIT_LIST_HEAD(&udc->ep0req.queue);
+
+	/* setup Endpoints */
+	vusb_eps_init(udc);
 
   rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
   if (rc) {
@@ -766,25 +801,18 @@ static int vusb_probe(struct spi_device *spi)
     return rc;
   }
 
-  udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-    sizeof(u8), GFP_KERNEL);
-  if (!udc->transfer)
-  {
+  udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
+  if (!udc->transfer) {
     dev_err(&spi->dev, "Unable to allocate Hub transfer buffer.\n");
     return -ENOMEM;
   }
-  udc->spitransfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-    sizeof(u8), GFP_KERNEL);
-  if (!udc->spitransfer)
-  {
+  udc->spitransfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
+  if (!udc->spitransfer) {
     dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
     return -ENOMEM;
   }
-
-  udc->spiwritebuffer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH,
-    sizeof(*udc->spiwritebuffer), GFP_KERNEL);
-  if (!udc->spiwritebuffer)
-  {
+  udc->spiwritebuffer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
+  if (!udc->spiwritebuffer){
     dev_err(&spi->dev, "Unable to allocate SPI transfer buffer.\n");
     return -ENOMEM;
   }
@@ -840,9 +868,6 @@ static int vusb_probe(struct spi_device *spi)
 	udc->todo |= UDC_START;
   udc->softconnect = true;
 
-	/* setup Endpoints */
-	vusb_eps_init(udc);
-
 	usb_udc_vbus_handler(&udc->gadget, true);
 	usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 	//vusb_start(udc);
@@ -875,28 +900,18 @@ static int vusb_probe(struct spi_device *spi)
   UDCVDBG(udc, "Succesfully initialized vusb.\n");
 
   vusb_mpack_buffer(udc, 2, udc->transfer, 512);
-
-	udc->qwork = create_singlethread_workqueue("octohub");
 	
+	INIT_WORK(&udc->vusb_irq_wq, vusb_irq_mcu_handler);
+
+
+#ifdef _DEBUG
+	udc->qwork = create_singlethread_workqueue("octohub");
 	work_udc_t *work1;
 	work1 = kcalloc(1, sizeof(work_udc_t), GFP_KERNEL);
 	work1->udc = udc;
 	INIT_WORK(&work1->work, vusb_work_handler);
 	queue_work(udc->qwork, &work1->work);
-
-	work1 = kcalloc(1, sizeof(work_udc_t), GFP_KERNEL);
-	work1->udc = udc;
-	INIT_WORK(&work1->work, vusb_work_irqhandler);
-	queue_work(udc->qwork, &work1->work);
-
-	//INIT_WORK(&udc->vusb_work, vusb_work_handler);
-	//queue_work(udc->qwork, &udc->vusb_work);
-
-	//struct work_udc work2;
-	//work2.udc = udc;
-	//INIT_WORK_ONSTACK(&work2.work, vusb_work_irqhandler);
-	//queue_work(udc->qwork, &work2.work);
-	//UDCVDBG(udc, "********** work: %x %x\n", work->work);
+#endif
 
 	return 0;
 err:
@@ -929,6 +944,11 @@ static int vusb_remove(struct spi_device *spi)
 
   dev_t dev_id = MKDEV(udc->crdev_major, 0);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
+
+	//if (udc->qwork) {
+	//	flush_workqueue(udc->qwork);
+	//	destroy_workqueue(udc->qwork);
+	//}
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");
 
