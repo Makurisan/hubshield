@@ -202,6 +202,7 @@ struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
   struct work_struct ep_wq;
+  struct work_struct ep_wt;
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int pipe; // pipe index on MCU
@@ -254,8 +255,6 @@ struct vusb_udc {
   int mcu_irq;
 
   struct wait_queue_head spi_read_queue;
-  struct wait_queue_head service_thread_wq;
-  u32 service_request;
 
   u8 crc_table[CRC8_TABLE_SIZE];
 
@@ -272,6 +271,7 @@ struct vusb_udc {
 
   struct vusb_ep ep[VUSB_MAX_EPS];
   struct vusb_req ep0req;
+  u8 ep0buf[64];
 
   struct usb_gadget_driver* driver;
 
@@ -282,8 +282,6 @@ struct vusb_udc {
 
   struct usb_ctrlrequest setup;
 
-  struct mutex spi_bus_mutex;
-
 
   struct device* dev;
 
@@ -292,7 +290,6 @@ struct vusb_udc {
 
   bool suspended;
 
-  u8 ep0buf[64];
 
   u32 todo;
 

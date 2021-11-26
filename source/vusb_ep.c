@@ -75,10 +75,8 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, attrib:%x\n",
          _ep->name, desc->bEndpointAddress, desc->bmAttributes);
 
-  set_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request);
-  spin_lock_irqsave(&udc->wq_lock, flags);
-  wake_up_interruptible(&udc->service_thread_wq);
-  spin_unlock_irqrestore(&udc->wq_lock, flags);
+  // schedule to work
+  schedule_work(&ep->ep_wt);
 
   return 0;
 }
@@ -127,10 +125,8 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   struct vusb_udc* udc = ep->udc;
 
   vusb_nuke(ep, -ESHUTDOWN);
-
   _vusb_ep_disable(ep);
-
-  wake_up_process(udc->thread_service);
+  schedule_work(&ep->ep_wt);
 
   return 0;
 }
@@ -237,10 +233,39 @@ struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
   return 0;
 }
 
-/// <summary>
-/// add comment may run in parallel
-/// </summary>
-/// <param name="work"></param>
+// called from enable/disable ....
+static void vusb_ep_irq_state(struct work_struct* work)
+{
+  unsigned long flags;
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, ep_wt);
+  
+  if (ep->todo & ENABLE_EP) {
+    spin_lock_irqsave(&ep->lock, flags);
+    ep->todo &= ~ENABLE_EP;
+    spin_unlock_irqrestore(&ep->lock, flags);
+
+    u8 transfer[24];
+    UDCVDBG(ep->udc, "spi_vusb_enable name:%s, addr: %x, attrib:%x\n",
+      ep->name, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
+    transfer[0] = ep->port; // octopus port
+    transfer[1] = ep->pipe; // octopus pipe
+    memmove(&transfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
+    vusb_write_buffer(ep->udc, VUSB_REG_PIPE_EP_ENABLE, transfer,
+      sizeof(u8) * 2 + sizeof(struct usb_endpoint_descriptor));
+  } else
+  if (ep->todo & STALL_EP) {
+    spin_lock_irqsave(&ep->lock, flags);
+    ep->todo &= ~STALL_EP;
+    spin_unlock_irqrestore(&ep->lock, flags);
+    UDCVDBG(ep->udc, "spi_vusb_stall 'STALL' request, name: %s\n", ep->name);
+  }
+  else {
+    UDCVDBG(ep->udc, "spi_vusb_stall '!STALL' request, name: %s\n", ep->name);
+    ep->halted = 0;
+  }
+
+}
+
 static void vusb_ep_irq_process(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, ep_wq);
@@ -279,7 +304,6 @@ static void vusb_ep_irq_process(struct work_struct* work)
 
 }
 
-
 void vusb_eps_init(struct vusb_udc* udc)
 {
   int idx;
@@ -300,6 +324,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->ep_usb.name = ep->name;
     ep->ep_usb.ops = &vusb_ep_ops;
     INIT_WORK(&ep->ep_wq, vusb_ep_irq_process);
+    INIT_WORK(&ep->ep_wt, vusb_ep_irq_state);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
     ep->pipe = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
 

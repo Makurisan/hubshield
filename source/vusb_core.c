@@ -36,64 +36,6 @@ static const char driver_name[] = "vusb-udc";
 static int vusb_remove(struct spi_device* spi);
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx);
 
-static int spi_vusb_enable(struct vusb_ep *ep)
-{
-	struct vusb_udc *udc = ep->udc;
-	unsigned long flags;
-	u8 epdis, epien;
-	int todo;
-
-	spin_lock_irqsave(&ep->lock, flags);
-	todo = ep->todo & ENABLE_EP;
-	ep->todo &= ~ENABLE_EP;
-	spin_unlock_irqrestore(&ep->lock, flags);
-
-	if (!todo || ep->id == 0)
-		return false;
-
-	if (todo == ENABLE) {
-    UDCVDBG(udc, "spi_vusb_enable name:%s, addr: %x, attrib:%x\n",
-      ep->name, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
-    udc->spitransfer[0] = ep->port; // octopus port
-    udc->spitransfer[1] = ep->pipe; // octopus pipe
-    memmove(&udc->spitransfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
-    vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, udc->spitransfer, 
-                        sizeof(u8)*2 + sizeof(struct usb_endpoint_descriptor));
-	} else {
-
-	}
-
-	return true;
-}
-
-static int spi_vusb_stall(struct vusb_ep *ep)
-{
-	struct vusb_udc *udc = ep->udc;
-	unsigned long flags;
-	u8 epstalls;
-	int todo;
-
-	spin_lock_irqsave(&ep->lock, flags);
-	todo = ep->todo & STALL_EP;
-	ep->todo &= ~STALL_EP;
-	spin_unlock_irqrestore(&ep->lock, flags);
-
-	if (!todo || ep->id == 0)
-		return false;
-
-	//epstalls = spi_rd8(udc, VUSB_REG_EPSTALLS);
-	if (todo == STALL) {
-		UDCVDBG(udc, "spi_vusb_stall 'STALL' request, name: %s\n", ep->name);
-		ep->halted = 1;
-	} else {
-		UDCVDBG(udc, "spi_vusb_stall '!STALL' request, name: %s\n", ep->name);
-		ep->halted = 0;
-	}
-	//spi_wr8(udc, VUSB_REG_EPSTALLS, epstalls | ACKSTAT);
-
-	return true;
-}
-
 static void __vusb_stop(struct vusb_udc *udc)
 {
 	u8 val;
@@ -245,8 +187,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 		else
 			ep->todo |= UNSTALL;
 		spin_unlock_irqrestore(&ep->lock, flags);
-		spi_vusb_stall(ep);
-    UDCVDBG(udc, "vusb_set_clear_feature: stall\n");
+		schedule_work(&ep->ep_wt);
+		UDCVDBG(udc, "vusb_set_clear_feature: stall\n");
 		return;
 	default:
 		break;
@@ -489,72 +431,6 @@ static int vusb_thread_data(struct vusb_udc *udc)
 	return false;
 }
 
-static int vusb_thread(void *dev_id)
-{
-	struct vusb_udc *udc = dev_id;
-	struct spi_device *spi = udc->spi;
-	int i, loop_again = 1;
-	unsigned long flags;
-  int ret;
-  int rc;
-
-	while (!kthread_should_stop()) {
-
-		if (!loop_again) {
-      spin_lock_irqsave(&udc->lock, flags);
-			if (udc->todo & ENABLE_IRQ) {
-        enable_irq(udc->mcu_irq);
-				udc->todo &= ~ENABLE_IRQ;
-			}
-			spin_unlock_irqrestore(&udc->lock, flags);
-      
-      // wait interruptible
-      spin_lock_irqsave(&udc->wq_lock, flags);
-      rc = wait_event_interruptible_lock_irq_timeout(udc->service_thread_wq,
-        kthread_should_stop() || udc->service_request, udc->wq_lock, msecs_to_jiffies(500));
-      spin_unlock_irqrestore(&udc->wq_lock, flags);
-
-      if (kthread_should_stop())
-        break;
-
-		}
-		loop_again = 0;
-
-		mutex_lock(&udc->spi_bus_mutex);
-
-    /* wait event with timeout elapsed */
-    if (rc == 0) {
-      //dev_info(udc->dev, "thread timeout value: %d ...\n", udc->service_request);
-      goto loop;
-    }
-    //UDCVDBG(udc, "---> USB-Pipe vusb_thread: %x\n", 5);
-
- 		/* If disconnected */
-		if (!udc->softconnect)
-			goto loop;
-
-    if (test_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request)) {
-      for (i = 1; i < VUSB_MAX_EPS; i++) {
-			  struct vusb_ep *ep = &udc->ep[i];
-        if (spi_vusb_enable(ep))
-        {
-          loop_again = 1;
-        }
-			  if (spi_vusb_stall(ep))
-				  loop_again = 1;
-	  	}
-      clear_bit(VUSB_MCU_EP_ENABLE, (void*)&udc->service_request);
-    }
-
-  loop:
-		mutex_unlock(&udc->spi_bus_mutex);
-	}
-
-	set_current_state(TASK_RUNNING);
-	dev_info(udc->dev, "SPI thread exiting\n");
-	return 0;
-}
-
 static int vusb_wakeup(struct usb_gadget *gadget)
 {
 	struct vusb_udc *udc = to_udc(gadget);
@@ -662,16 +538,15 @@ static int vusb_probe(struct spi_device *spi)
 
   spin_lock_init(&udc->lock);
   spin_lock_init(&udc->wq_lock);
-  mutex_init(&udc->spi_bus_mutex);
 
   /* INTERRUPT spi read queue */
   init_waitqueue_head(&udc->spi_read_queue);
 	mutex_init(&udc->spi_read_mutex);
 	mutex_init(&udc->spi_write_mutex);
 
-	udc->ep0req.ep = &udc->ep[0];
-	udc->ep0req.usb_req.buf = udc->ep0buf;
-	INIT_LIST_HEAD(&udc->ep0req.queue);
+	//udc->ep0req.ep = &udc->ep[0];
+	//udc->ep0req.usb_req.buf = udc->ep0buf;
+	//INIT_LIST_HEAD(&udc->ep0req.queue);
 
 	/* setup Endpoints */
 	vusb_eps_init(udc);
@@ -742,9 +617,6 @@ static int vusb_probe(struct spi_device *spi)
   gpiod_set_value(udc->mcu_gpreset, 1);
 #endif
 
-  // our thread wait queue
-  init_waitqueue_head(&udc->service_thread_wq);
-
 	udc->is_selfpowered = 1;
 	udc->todo |= UDC_START;
   udc->softconnect = true;
@@ -768,15 +640,6 @@ static int vusb_probe(struct spi_device *spi)
   udc->chardev_class->dev_uevent = vusb_chardev_uevent;
 
   device_create(udc->chardev_class, NULL, MKDEV(udc->crdev_major, 1), NULL, "vusb-%d", 1);
-
-  // clear the bit that the thread is waiting for something
-  clear_bit(VUSB_MCU_IRQ_GPIO, (void*)&udc->service_request);
-
-  udc->thread_service = kthread_create(vusb_thread, udc, "vusb-thread");
-  if (IS_ERR(udc->thread_service))
-    return PTR_ERR(udc->thread_service);
-
-  wake_up_process(udc->thread_service);
 
   UDCVDBG(udc, "Succesfully initialized vusb.\n");
 
