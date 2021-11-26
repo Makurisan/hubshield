@@ -26,7 +26,6 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
-#define to_udc(g)		container_of((g), struct vusb_udc, gadget)
 
 extern const struct file_operations vusb_ops;
 
@@ -182,8 +181,8 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 		else
 			ep->todo |= UNSTALL;
 		spin_unlock_irqrestore(&ep->lock, flags);
-		schedule_work(&ep->ep_wt);
 		UDCVDBG(udc, "vusb_set_clear_feature: stall\n");
+		schedule_work(&ep->wk_status);
 		return;
 	default:
 		break;
@@ -362,7 +361,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 				struct vusb_ep* ep = vusb_get_ep(udc, irq);
 				// schedule a setup packet
 				if (ep)
-					schedule_work(&ep->ep_ws);
+					schedule_work(&ep->wk_irq_data);
 				pipeirq &= ~BIT(irq);
 			}
 		}
@@ -424,7 +423,7 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 
 static int vusb_wakeup(struct usb_gadget *gadget)
 {
-	struct vusb_udc *udc = to_udc(gadget);
+	struct vusb_udc *udc = gadget_to_udc(gadget);
 	unsigned long flags;
 	int ret = -EINVAL;
 	dev_info(&udc->spi->dev, "Hub gadget vusb_wakeup.\n");
@@ -434,7 +433,7 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 static int vusb_udc_start(struct usb_gadget *gadget,
 			     struct usb_gadget_driver *driver)
 {
-	struct vusb_udc *udc = to_udc(gadget);
+	struct vusb_udc *udc = gadget_to_udc(gadget);
 	unsigned long flags;
 
 	spin_lock_irqsave(&udc->lock, flags);
@@ -460,7 +459,7 @@ static int vusb_udc_start(struct usb_gadget *gadget,
 
 static int vusb_udc_stop(struct usb_gadget *gadget)
 {
-	struct vusb_udc *udc = to_udc(gadget);
+	struct vusb_udc *udc = gadget_to_udc(gadget);
 	unsigned long flags;
 
 	spin_lock_irqsave(&udc->lock, flags);
@@ -471,9 +470,8 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	//if (udc->thread_service &&
-	//    udc->thread_service->state != TASK_RUNNING)
-	//	wake_up_process(udc->thread_service);
+	// reset the port on the hub
+
 
   dev_info(&udc->spi->dev, "Hub gadget vusb_udc_stop.\n");
 	return 0;

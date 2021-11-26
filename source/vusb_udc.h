@@ -177,6 +177,7 @@ enum vusb_req_code {
 #define VUSB_MCU_IRQ_GPIO    0x00
 #define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
+#define gadget_to_udc(g)		container_of((g), struct vusb_udc, gadget)
 
 
 // register data map
@@ -201,9 +202,9 @@ struct vusb_req {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
-  struct work_struct ep_wq; // ep data handling
-  struct work_struct ep_wt; // ep status handling
-  struct work_struct ep_ws; // ep control setup
+  struct work_struct wk_data; // ep data handling
+  struct work_struct wk_status; // ep status handling
+  struct work_struct wk_irq_data; // mcu pipe
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int pipe; // pipe index on MCU
