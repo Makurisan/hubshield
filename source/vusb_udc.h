@@ -201,8 +201,9 @@ struct vusb_req {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
-  struct work_struct ep_wq;
-  struct work_struct ep_wt;
+  struct work_struct ep_wq; // ep data handling
+  struct work_struct ep_wt; // ep status handling
+  struct work_struct ep_ws; // ep control setup
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int pipe; // pipe index on MCU
@@ -272,16 +273,12 @@ struct vusb_udc {
   struct vusb_ep ep[VUSB_MAX_EPS];
   struct vusb_req ep0req;
   u8 ep0buf[64];
+  struct usb_ctrlrequest setup;
 
   struct usb_gadget_driver* driver;
 
-  struct task_struct* thread_service;
-
   int remote_wkp, is_selfpowered;
   bool softconnect;
-
-  struct usb_ctrlrequest setup;
-
 
   struct device* dev;
 
@@ -290,17 +287,9 @@ struct vusb_udc {
 
   bool suspended;
 
-
   u32 todo;
 
 };
-
-
-typedef struct work_udc {
-  struct work_struct	work;
-  struct vusb_udc* udc;
-  struct vusb_ep* ep;
-}work_udc_t;
 
 int vusb_chardev_uevent(struct device* dev, struct kobj_uevent_env* env);
 void pr_hex_mark(const char* mem, int count, int mark, const char* label);

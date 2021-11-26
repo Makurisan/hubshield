@@ -45,16 +45,11 @@ static void __vusb_stop(struct vusb_udc *udc)
 	for (i = 1; i < VUSB_MAX_EPS; i++)
 		vusb_nuke(&udc->ep[i], -ECONNRESET);
 
+	dev_info(udc->dev, "vusb_stop\n");
+
 	/* Disable IRQ to CPU */
 	//spi_wr8(udc, VUSB_REG_CPUCTL, 0);
 
-	//val = spi_rd8(udc, VUSB_REG_USBCTL);
-	//val |= PWRDOWN;
-	//if (udc->is_selfpowered)
-	//	val &= ~HOSCSTEN;
-	//else
-	//	val |= HOSCSTEN;
-	//spi_wr8(udc, VUSB_REG_USBCTL, val);
 }
 
 static void __vusb_start(struct vusb_udc *udc)
@@ -365,8 +360,9 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			while (hweight32(pipeirq)) {
 				u32 irq = _bf_ffsl(pipeirq);
 				struct vusb_ep* ep = vusb_get_ep(udc, irq);
+				// schedule a setup packet
 				if (ep)
-					schedule_work(&ep->ep_wq);
+					schedule_work(&ep->ep_ws);
 				pipeirq &= ~BIT(irq);
 			}
 		}
@@ -426,16 +422,12 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   return iret;
 }
 
-static int vusb_thread_data(struct vusb_udc *udc)
-{
-	return false;
-}
-
 static int vusb_wakeup(struct usb_gadget *gadget)
 {
 	struct vusb_udc *udc = to_udc(gadget);
 	unsigned long flags;
 	int ret = -EINVAL;
+	dev_info(&udc->spi->dev, "Hub gadget vusb_wakeup.\n");
 	return ret;
 }
 
@@ -457,9 +449,9 @@ static int vusb_udc_start(struct usb_gadget *gadget,
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	if (udc->thread_service &&
-	    udc->thread_service->state != TASK_RUNNING)
-		wake_up_process(udc->thread_service);
+	//if (udc->thread_service &&
+	//    udc->thread_service->state != TASK_RUNNING)
+	//	wake_up_process(udc->thread_service);
 
   dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start.\n");
 
@@ -479,9 +471,9 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	if (udc->thread_service &&
-	    udc->thread_service->state != TASK_RUNNING)
-		wake_up_process(udc->thread_service);
+	//if (udc->thread_service &&
+	//    udc->thread_service->state != TASK_RUNNING)
+	//	wake_up_process(udc->thread_service);
 
   dev_info(&udc->spi->dev, "Hub gadget vusb_udc_stop.\n");
 	return 0;
@@ -669,14 +661,10 @@ static int vusb_remove(struct spi_device *spi)
 	struct vusb_udc *udc = spi_get_drvdata(spi);
 	unsigned long flags;
 
-  dev_info(&spi->dev, "Removing USB udc hub\n");
+  dev_info(&spi->dev, "Removing vusbhub\n");
 
   disable_irq(udc->mcu_irq);
   disable_irq(udc->spi_datrdy);
-
-	spin_lock_irqsave(&udc->lock, flags);
-	kthread_stop(udc->thread_service);
-	spin_unlock_irqrestore(&udc->lock, flags);
 
   cdev_del(&udc->cdev);
 
