@@ -430,12 +430,31 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 	return ret;
 }
 
+static void vusb_port_start(struct work_struct* work)
+{
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_start);
+  struct vusb_udc* udc = ep->udc;
+
+  u8 transfer[24];
+  transfer[0] = ep->port; // octopus port
+  transfer[1] = ep->pipe; // octopus pipe
+  //vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2);
+	vusb_write_buffer(udc, VUSB_REG_PORT_ENABLE, transfer, sizeof(u8) * 2);
+
+	dev_info(&udc->spi->dev, "Port %d max packet size:%d, limit:%d", ep->port,
+			ep->ep_usb.maxpacket, ep->ep_usb.maxpacket_limit);
+
+}
+
 static int vusb_udc_start(struct usb_gadget *gadget,
 			     struct usb_gadget_driver *driver)
 {
 	struct vusb_udc *udc = gadget_to_udc(gadget);
-	unsigned long flags;
+  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
 
+  INIT_WORK(&ep->wk_start, vusb_port_start);
+
+	unsigned long flags;
 	spin_lock_irqsave(&udc->lock, flags);
 	/* hook up the driver */
 	driver->driver.bus = NULL;
@@ -448,11 +467,9 @@ static int vusb_udc_start(struct usb_gadget *gadget,
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-	//if (udc->thread_service &&
-	//    udc->thread_service->state != TASK_RUNNING)
-	//	wake_up_process(udc->thread_service);
+  schedule_work(&ep->wk_start);
 
-  dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start.\n");
+  dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start on port:%d, index:%d", ep->port, ep->pipe);
 
 	return 0;
 }

@@ -161,7 +161,7 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   _req->status = -EINPROGRESS;
   _req->actual = 0;
 
-#ifndef _DEBUG
+#ifdef _DEBUG
   spin_lock_irqsave(&ep->lock, flags);
   void *buf = req->usb_req.buf + req->usb_req.actual;
   int length = req->usb_req.length - req->usb_req.actual;
@@ -281,7 +281,7 @@ static void vusb_ep_data(struct work_struct* work)
   else
   if (ep->ep_usb.caps.dir_in) {
     dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->pipe);
-    (vusb_do_data(ep->udc, ep));
+    vusb_do_data(ep->udc, ep);
   }
 
 }
@@ -319,6 +319,39 @@ static void vusb_ep_status(struct work_struct* work)
 
 }
 
+
+struct pipe_ch_cfg {
+  int				ep_port;
+  int				ep_num;
+  int				ep_type;
+  int				dir;
+  int				n_fifo_slots;
+  int				max_pkt_fs;
+};
+
+#define VUSB_CTRL		0x00
+#define VUSB_ISOC		0x01
+#define VUSB_BULK		0x02
+#define VUSB_INTR		0x03
+
+#define VUSB_OUT		0x00
+#define VUSB_IN			0x01
+
+static const struct pipe_ch_cfg pipe_defaults[] = {
+
+  /* 
+    
+        ep_port       ep_type         n_fifo_slots    
+  idx      |  n_pipe    |       dir       |    max_pkt_fs 
+   |       |    |       |        |        |      |        */
+  [0] = {  1,   2, VUSB_CTRL, VUSB_OUT,  32,    64, },
+  [1] = {  1,   3, VUSB_INTR, VUSB_OUT,  32,    64, },
+  [2] = {  1,   4, VUSB_INTR, VUSB_IN,  128,   512, },
+  [3] = {  2,   5, VUSB_CTRL, VUSB_IN,  128,   512, },
+  [4] = {  2,   6, VUSB_INTR, VUSB_OUT,  32,    64, },
+  [5] = {  2,   7, VUSB_INTR, VUSB_IN,   32,    64, },
+};
+
 void vusb_eps_init(struct vusb_udc* udc)
 {
   int idx;
@@ -345,6 +378,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->pipe = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
 
     if (idx == 0) { /* For EP0 */
+ // ep->pipe = portnr - 1;
       ep->ep_usb.desc = &ep0_desc;
       ep->ep_usb.maxpacket = usb_endpoint_maxp(&ep0_desc);
       ep->ep_usb.caps.type_control = true;
@@ -359,7 +393,8 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.dir_out = true;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-out", idx);
     }
-    else { /* EP2 & EP3 are IN */
+
+    if (idx > 1) { /* EP2 & EP3 are IN */
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = false;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-in", idx);

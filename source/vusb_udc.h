@@ -41,7 +41,7 @@ enum vusb_req_code {
 #define VUSB_REG_HWATTACH   0x04
 #define VUSB_REG_MEMORY		  0x05
  // register function
-#define VUSB_REG_SET        0x06
+#define VUSB_REG_SET          0x06
 #define VUSB_REG_PORT_ATTACH  0x07
 #define VUSB_REG_PORT_DETACH  0x08
 #define VUSB_REG_ACK					0x09
@@ -79,6 +79,7 @@ enum vusb_req_code {
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
 #define VUSB_REG_PIPE_EP_ENABLE   0x18
 #define VUSB_REG_PIPE_MAXPKTSIZE  0x19
+#define VUSB_REG_PORT_ENABLE      0x1a
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
@@ -178,6 +179,7 @@ enum vusb_req_code {
 #define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
 #define gadget_to_udc(g)		container_of((g), struct vusb_udc, gadget)
+#define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
 
 
 // register data map
@@ -202,7 +204,8 @@ struct vusb_req {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
-  struct work_struct wk_data; // ep data handling
+  struct work_struct wk_start; // port ep0 handling
+  struct work_struct wk_data;  // ep data handling
   struct work_struct wk_status; // ep status handling
   struct work_struct wk_irq_data; // mcu pipe
   struct list_head queue;
@@ -270,8 +273,8 @@ struct vusb_udc {
   u32			max_ports;
 
   struct usb_gadget gadget;
-
   struct vusb_ep ep[VUSB_MAX_EPS];
+  
   struct vusb_req ep0req;
   u8 ep0buf[64];
   struct usb_ctrlrequest setup;
