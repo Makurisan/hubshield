@@ -28,6 +28,7 @@
 
 #define to_vusb_req(r)	container_of((r), struct vusb_req, usb_req)
 #define to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
+#define wk_data_to_vusb_ep(e) container_of((e), struct work_struct, wk_data)
 
 static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 {
@@ -160,6 +161,16 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   _req->status = -EINPROGRESS;
   _req->actual = 0;
 
+#ifndef _DEBUG
+  spin_lock_irqsave(&ep->lock, flags);
+  void *buf = req->usb_req.buf + req->usb_req.actual;
+  int length = req->usb_req.length - req->usb_req.actual;
+  int psz = ep->ep_usb.maxpacket;
+  length = min(length, psz);
+  pr_hex_mark(buf, length, PRINTF_READ, ep->name);
+  spin_unlock_irqrestore(&ep->lock, flags);
+#endif // _DEBUG
+
   spin_lock_irqsave(&ep->lock, flags);
   list_add_tail(&req->queue, &ep->queue);
   schedule_work(&ep->wk_data);
@@ -244,7 +255,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
       }
       else {
         // OUT data from the mcu...
-        UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, %x\n", ep->name, ep->ep_usb.desc->bEndpointAddress);
+        UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d\n", ep->name, ep->pipe);
         pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
       }
     }
@@ -256,22 +267,22 @@ static void vusb_ep_irq_data(struct work_struct* work)
 
 static void vusb_ep_data(struct work_struct* work)
 {
-  struct vusb_ep* ep = container_of(work, struct vusb_ep, ep_wq);
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_data);
 
   if (ep->ep_usb.caps.type_control) {
     // process the data from the list
     while (vusb_do_data(ep->udc, ep));
   }
   else
-    if (ep->ep_usb.caps.dir_out) {
-      dev_info(ep->udc->dev, "vusb_ep_data ep-out: %s \n", ep->name);
-      //vusb_do_data(ep->udc, ep);
-    }
-    else
-      if (ep->ep_usb.caps.dir_in) {
-        dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s \n", ep->name);
-        (vusb_do_data(ep->udc, ep));
-      }
+  if (ep->ep_usb.caps.dir_out) {
+    dev_info(ep->udc->dev, "vusb_ep_data ep-out: %s, pipe: %d\n", ep->name, ep->pipe);
+    //vusb_do_data(ep->udc, ep);
+  }
+  else
+  if (ep->ep_usb.caps.dir_in) {
+    dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->pipe);
+    (vusb_do_data(ep->udc, ep));
+  }
 
 }
 
@@ -287,8 +298,8 @@ static void vusb_ep_status(struct work_struct* work)
     spin_unlock_irqrestore(&ep->lock, flags);
 
     u8 transfer[24];
-    UDCVDBG(ep->udc, "vusb_ep_state name:%s, addr: %x, attrib:%x\n",
-      ep->name, ep->ep_usb.desc->bEndpointAddress, ep->ep_usb.desc->bmAttributes);
+    UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x\n",
+      ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes);
     transfer[0] = ep->port; // octopus port
     transfer[1] = ep->pipe; // octopus pipe
     memmove(&transfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
@@ -299,10 +310,10 @@ static void vusb_ep_status(struct work_struct* work)
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~STALL_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
-    UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s\n", ep->name);
+    UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s, pipe:%d\n", ep->name, ep->pipe);
   }
   else {
-    UDCVDBG(ep->udc, "vusb_ep_state '!STALL' request, name: %s\n", ep->name);
+    UDCVDBG(ep->udc, "vusb_ep_state '!STALL' request, name: %s, pipe: %d\n", ep->name, ep->pipe);
     ep->halted = 0;
   }
 

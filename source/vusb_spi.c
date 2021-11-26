@@ -160,7 +160,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   // clear the header
   memset(udc->transfer, 0, VUSB_SPI_HEADER);
 
-#ifndef READ_ONE
+#ifdef READ_ONE
   tr.tx_buf = NULL;
   tr.rx_buf = udc->transfer;
   tr.len = VUSB_SPI_BUFFER_LENGTH / 4;
@@ -190,13 +190,14 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
   }
   return -5;
 #else
-  tr.rx_buf = buffer;
+  tr.rx_buf = udc->transfer;
   tr.len = VUSB_SPI_HEADER;
   spi_message_add_tail(&tr, &m);
   // read the four bytes header
   if (!spi_sync_locked(spi, &m))
   {
-    spi_cmd_t* cmd = (spi_cmd_t*)buffer;
+    spi_cmd_t* cmd = (spi_cmd_t*)udc->transfer;
+    // save the header value
     cmd_reg = cmd->reg.val;
     ////UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
     //pr_hex_mark(buffer, VUSB_SPI_HEADER, PRINTF_READ);
@@ -206,8 +207,8 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       memset(&tr, 0, sizeof(tr));
       spi_message_init(&m);
       // data
-      tr.rx_buf = &buffer[offsetof(spi_cmd_t, data)];
-      if (cmd->length < VUSB_SPI_BUFFER_LENGTH)
+      tr.rx_buf = &udc->transfer[offsetof(spi_cmd_t, data)];
+      if (cmd->length < (VUSB_SPI_BUFFER_LENGTH-VUSB_SPI_HEADER))
       {
         //UDCVDBG(udc, "Mcu read length:%d\n", cmd->length);
         tr.len = cmd->length;
@@ -218,11 +219,12 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
               pr_hex_mark(buffer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "correct");
             //pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, NULL);
             // set the reg back to the header, the other fields are correct  
+            memmove(buffer, udc->transfer, cmd->length + VUSB_SPI_HEADER);
             cmd->reg.val = cmd_reg;
             return cmd->length;
           }
           else {
-            pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
+            pr_hex_mark(udc->transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
             //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
             return -1;
           }
@@ -234,7 +236,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       }
       else {
         UDCVDBG(udc, "mcu read spi buffer exceeds maximal size length: %02x\n", cmd->length);
-        pr_hex_mark(udc->spitransfer, VUSB_SPI_HEADER, PRINTF_READ, NULL);
+        pr_hex_mark(udc->transfer, VUSB_SPI_HEADER, PRINTF_READ, NULL);
         return -3;
       }
     }
