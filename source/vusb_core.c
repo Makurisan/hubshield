@@ -430,25 +430,25 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 	return ret;
 }
 
+#define VUSB_TYPE_CTRL	0
+#define VUSB_TYPE_INT		1
+
 static void vusb_port_start(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_start);
   struct vusb_udc* udc = ep->udc;
 
   u8 transfer[24];
-  transfer[0] = ep->port; // octopus port
-  transfer[1] = ep->pipe; // octopus pipe
+  transfer[0] = ep->port; // port
+  transfer[1] = VUSB_TYPE_CTRL; // pipe type 0 is ctrl ep
 	// we need a seperate function to activate ep0
-  // vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2);
-	vusb_write_buffer(udc, VUSB_REG_PORT_ENABLE, transfer, sizeof(u8) * 2);
-
-	dev_info(&udc->spi->dev, "Port %d max packet size:%d, limit:%d", ep->port,
-			ep->ep_usb.maxpacket, ep->ep_usb.maxpacket_limit);
-
+	if (vusb_read_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2)) {
+		uint8_t pipe = transfer[1];
+    dev_info(&udc->spi->dev, "Port %d is enabled with pipe: %d", ep->port, pipe);
+	}
 }
 
-static int vusb_udc_start(struct usb_gadget *gadget,
-			     struct usb_gadget_driver *driver)
+static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *driver)
 {
 	struct vusb_udc *udc = gadget_to_udc(gadget);
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
