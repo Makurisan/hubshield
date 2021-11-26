@@ -269,7 +269,6 @@ static void vusb_ep_irq_state(struct work_struct* work)
 static void vusb_ep_irq_process(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, ep_wq);
-  dev_info(ep->udc->dev, "vusb_ep_irq_process ep: %s \n", ep->name);
 
   if (ep->ep_usb.caps.type_control) {
     u8 transfer[24];
@@ -295,11 +294,12 @@ static void vusb_ep_irq_process(struct work_struct* work)
   }
   else
   if (ep->ep_usb.caps.dir_out) {
-
+    dev_info(ep->udc->dev, "vusb_ep_irq_process ep: %s \n", ep->name);
   }
   else
   if (ep->ep_usb.caps.dir_in) {
     vusb_do_data(ep->udc, ep);
+    dev_info(ep->udc->dev, "vusb_ep_irq_process ep: %s \n", ep->name);
   }
 
 }
