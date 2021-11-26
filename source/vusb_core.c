@@ -438,7 +438,8 @@ static void vusb_port_start(struct work_struct* work)
   u8 transfer[24];
   transfer[0] = ep->port; // octopus port
   transfer[1] = ep->pipe; // octopus pipe
-  //vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2);
+	// we need a seperate function to activate ep0
+  // vusb_write_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2);
 	vusb_write_buffer(udc, VUSB_REG_PORT_ENABLE, transfer, sizeof(u8) * 2);
 
 	dev_info(&udc->spi->dev, "Port %d max packet size:%d, limit:%d", ep->port,
