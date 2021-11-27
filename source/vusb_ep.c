@@ -100,32 +100,23 @@ void vusb_nuke(struct vusb_ep* ep, int status)
   spin_unlock_irqrestore(&ep->lock, flags);
 }
 
-static void _vusb_ep_disable(struct vusb_ep* ep)
-{
-  struct vusb_udc* udc = ep->udc;
-  unsigned long flags;
-
-  spin_lock_irqsave(&ep->lock, flags);
-
-  ep->ep_usb.desc = NULL;
-
-  ep->todo &= ~ENABLE_EP;
-  ep->todo |= DISABLE;
-
-  spin_unlock_irqrestore(&ep->lock, flags);
-
-  dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
-
-}
-
 static int vusb_ep_disable(struct usb_ep* _ep)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
   struct vusb_udc* udc = ep->udc;
+  unsigned long flags;
 
   vusb_nuke(ep, -ESHUTDOWN);
-  _vusb_ep_disable(ep);
+
+  spin_lock_irqsave(&ep->lock, flags);
+  ep->ep_usb.desc = NULL;
+  ep->todo &= ~ENABLE_EP;
+  ep->todo |= DISABLE;
+  spin_unlock_irqrestore(&ep->lock, flags);
+
   schedule_work(&ep->wk_status);
+
+  dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
 
   return 0;
 }

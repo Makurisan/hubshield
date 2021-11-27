@@ -441,11 +441,15 @@ static void vusb_port_start(struct work_struct* work)
   u8 transfer[24];
   transfer[0] = ep->port; // port
   transfer[1] = VUSB_TYPE_CTRL; // pipe type 0 is ctrl ep
-	// we need a seperate function to activate ep0
+	// we need a separate function to activate ep0
+#ifdef _DEBUG
 	if (vusb_read_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2)) {
-		uint8_t pipe = transfer[1];
-    dev_info(&udc->spi->dev, "Port %d is enabled with pipe: %d", ep->port, pipe);
+		uint8_t port = transfer[0];
+    dev_info(&udc->spi->dev, "Port %d is enabled", ep->port);
 	}
+#else
+  dev_info(&udc->spi->dev, "Port %d is enabled with control pipe: %d", ep->port, ep->pipe);
+#endif // _DEBUG
 }
 
 static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *driver)
