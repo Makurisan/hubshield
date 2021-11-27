@@ -11,7 +11,6 @@
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
  */
-
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/spi/spi.h>
@@ -52,21 +51,22 @@ typedef struct vusb_send {
   uint8_t cmdst[0x40];
   uint8_t port;
   uint8_t length;
+  uint8_t spi;
 }vusb_send_t;
-const vusb_send_t vusb_send_tab[] = {
-    { "r",   /*cmd*/ VUSB_REG_RESET,      "REG_RESET",   /*port*/ 0, 1},
-    { "a",   /*cmd*/ VUSB_REG_HWATTACH,   "REG_HWATTACH",/*port*/ 0, 1},
-    { "d",   /*cmd*/ VUSB_REG_HWDETACH,   "REG_HWDETACH",/*port*/ 1, 1},
-    { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",  /*port*/ 0, 2},
-    { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",  /*port*/ 0, 2},
-   // debug 
-    { "p",   /*cmd*/ VUSB_REG_MEMORY,   "REG_MEMORY",  /*port*/ 0, 1},
-    { "s",   /*cmd*/ VUSB_REG_PRINTF,   "REG_PRINTF",  /*port*/ 0, 1},
-    { "t",   /*cmd*/ VUSB_REG_PRINTF1,  "REG_PRINTF",  /*port*/ 0, 1},
-    { "u",   /*cmd*/ VUSB_REG_PRINTF2,  "REG_PRINTF",  /*port*/ 0, 1},
-    { "v",   /*cmd*/ VUSB_REG_PRINTF3,  "REG_PRINTF",  /*port*/ 0, 1},
-    { "w",   /*cmd*/ VUSB_REG_PRINTF4,  "REG_PRINTF",  /*port*/ 0, 1},
-    { "x",   /*cmd*/ VUSB_REG_PRINTF99, "REG_PRINTF",  /*port*/ 0, 1},
+const vusb_send_t vusb_send_tab[] = { 
+    { "r",   /*cmd*/ VUSB_REG_RESET,      "REG_RESET",      /*port*/ 0, 1, 0},
+    { "a",   /*cmd*/ VUSB_REG_HWATTACH,   "REG_HWATTACH",   /*port*/ 0, 1, 0},
+    { "d",   /*cmd*/ VUSB_REG_HWDETACH,   "REG_HWDETACH",   /*port*/ 1, 1, 0},
+    { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",/*port*/ 0, 3, 1},
+    { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",/*port*/ 0, 3, 1},
+   // debug                                                            
+    { "p",   /*cmd*/ VUSB_REG_MEMORY,   "REG_MEMORY",       /*port*/ 0, 1, 0},
+    { "s",   /*cmd*/ VUSB_REG_PRINTF,   "REG_PRINTF",       /*port*/ 0, 1, 0},
+    { "t",   /*cmd*/ VUSB_REG_PRINTF1,  "REG_PRINTF",       /*port*/ 0, 1, 0},
+    { "u",   /*cmd*/ VUSB_REG_PRINTF2,  "REG_PRINTF",       /*port*/ 0, 1, 0},
+    { "v",   /*cmd*/ VUSB_REG_PRINTF3,  "REG_PRINTF",       /*port*/ 0, 1, 0},
+    { "w",   /*cmd*/ VUSB_REG_PRINTF4,  "REG_PRINTF",       /*port*/ 0, 1, 0},
+    { "x",   /*cmd*/ VUSB_REG_PRINTF99, "REG_PRINTF",       /*port*/ 0, 1, 0},
 };
 
 static int vusb_chrdev_open(struct inode* inode, struct file* file)
@@ -118,8 +118,11 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
         udc->transfer[0] = vusb_send_tab[j].port;
         if (vusb_send_tab[j].length > 1) {
           udc->transfer[1] = '1';
-          if (isdigit(data[i + 1]))
-            udc->transfer[1] = data[i+1];
+          if (isdigit(data[i + 1])) {
+            kstrtou8(&data[i + 1], 10, &udc->transfer[1]);
+          }
+          if (udc->transfer[1] <= 2)
+            udc->transfer[2] = vusb_send_tab[j].spi; // spi activate
         }
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
         //msleep_interruptible(100);
