@@ -272,7 +272,7 @@ static void vusb_ep_data(struct work_struct* work)
   else
   if (ep->ep_usb.caps.dir_in) {
     dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->pipe);
-    vusb_do_data(ep->udc, ep);
+    //vusb_do_data(ep->udc, ep);
   }
 
 }

@@ -204,7 +204,7 @@ struct vusb_req {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
-  struct work_struct wk_start; // port ep0 handling
+  struct work_struct wk_udc_work; // port ep0 udc work start/stop
   struct work_struct wk_data;  // ep data handling
   struct work_struct wk_status; // ep status handling
   struct work_struct wk_irq_data; // mcu pipe

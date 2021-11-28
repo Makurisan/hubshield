@@ -432,20 +432,21 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 
 #define VUSB_TYPE_CTRL	0
 #define VUSB_TYPE_INT		1
+#define DEBUG
 
 static void vusb_port_start(struct work_struct* work)
 {
-  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_start);
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
   struct vusb_udc* udc = ep->udc;
 
   u8 transfer[24];
   transfer[0] = ep->port; // port
   transfer[1] = VUSB_TYPE_CTRL; // pipe type 0 is ctrl ep
 	// we need a separate function to activate ep0
-#ifdef _DEBUG
+#ifdef DEBUG
 	if (vusb_read_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2)) {
 		uint8_t port = transfer[0];
-    dev_info(&udc->spi->dev, "Port %d is enabled", ep->port);
+    dev_info(&udc->spi->dev, "Hub has initiated port %d", ep->port);
 	}
 #else
   dev_info(&udc->spi->dev, "Port %d is enabled with control pipe: %d", ep->port, ep->pipe);
@@ -456,8 +457,6 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
 {
 	struct vusb_udc *udc = gadget_to_udc(gadget);
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-
-  INIT_WORK(&ep->wk_start, vusb_port_start);
 
 	unsigned long flags;
 	spin_lock_irqsave(&udc->lock, flags);
@@ -472,16 +471,34 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
 
-  schedule_work(&ep->wk_start);
+  INIT_WORK(&ep->wk_udc_work, vusb_port_start);
+	schedule_work(&ep->wk_udc_work);
 
-  dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start on port:%d, index:%d", ep->port, ep->pipe);
+  dev_info(&udc->spi->dev, "Hub vusb_udc_start on port:%d, index:%d", ep->port, ep->pipe);
 
 	return 0;
+}
+
+static void vusb_port_stop(struct work_struct* work)
+{
+	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
+	struct vusb_udc* udc = ep->udc;
+  dev_info(&udc->spi->dev, "Device on port %d is detached", ep->port);
+
+  u8 transfer[24];
+  transfer[0] = ep->port; // port
+  transfer[1] = VUSB_TYPE_CTRL;
+
+	if (vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2)) {
+    dev_info(&udc->spi->dev, "Device on port %d is detached", ep->port);
+  }
+
 }
 
 static int vusb_udc_stop(struct usb_gadget *gadget)
 {
 	struct vusb_udc *udc = gadget_to_udc(gadget);
+  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
 	unsigned long flags;
 
 	spin_lock_irqsave(&udc->lock, flags);
@@ -491,8 +508,9 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->softconnect = false;
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
-
-	// reset the port on the hub
+  
+  INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
+  schedule_work(&ep->wk_udc_work);
 
 
   dev_info(&udc->spi->dev, "Hub gadget vusb_udc_stop.\n");
@@ -563,12 +581,6 @@ static int vusb_probe(struct spi_device *spi)
 	/* setup Endpoints */
 	vusb_eps_init(udc);
 
-  rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
-  if (rc) {
-    dev_err(&spi->dev, "UDC gadget could not be added\n");
-    return rc;
-  }
-
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
   if (!udc->transfer) {
     dev_err(&spi->dev, "Unable to allocate Hub transfer buffer.\n");
@@ -633,10 +645,6 @@ static int vusb_probe(struct spi_device *spi)
 	udc->todo |= UDC_START;
   udc->softconnect = true;
 
-	usb_udc_vbus_handler(&udc->gadget, true);
-	usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
-	//vusb_start(udc);
-
   // char device
   dev_t usrdev;
   alloc_chrdev_region(&usrdev, 0, VUSB_MAX_CHAR_DEVICES, "vusb");
@@ -659,15 +667,17 @@ static int vusb_probe(struct spi_device *spi)
 	
 	INIT_WORK(&udc->vusb_irq_wq, vusb_irq_mcu_handler);
 
+  //udc->qwork = create_singlethread_workqueue("octohub");
 
-#ifdef _DEBUG
-	udc->qwork = create_singlethread_workqueue("octohub");
-	work_udc_t *work1;
-	work1 = kcalloc(1, sizeof(work_udc_t), GFP_KERNEL);
-	work1->udc = udc;
-	INIT_WORK(&work1->work, vusb_work_handler);
-	queue_work(udc->qwork, &work1->work);
-#endif
+	// gadget must be the last activated in the probe
+	rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
+  if (rc) {
+    dev_err(&spi->dev, "UDC gadget could not be added\n");
+    return rc;
+  }
+
+  usb_udc_vbus_handler(&udc->gadget, true);
+  usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 
 	return 0;
 err:
