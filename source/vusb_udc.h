@@ -71,17 +71,28 @@ enum vusb_req_code {
 #define VUSB_REG_IRQ_GET    0x10
 #define VUSB_REG_IRQ_SET    0x11
 #define VUSB_REG_IRQ_CLEAR  0x12
-// port register							 
 
 // pipe register
 #define VUSB_REG_PIPE_GET_DATA    0x15
-#define VUSB_REG_DEBUG            0x16
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
 #define VUSB_REG_PIPE_EP_ENABLE   0x18
 #define VUSB_REG_PIPE_MAXPKTSIZE  0x19
 #define VUSB_REG_PORT_ENABLE      0x1a
 
+// port register							 
+#define VUSB_REG_MAP_PORT_SET		  0x1b
+#define VUSB_REG_MAP_PORT_GET		  0x1c
+
 #define VUSB_REG_MAX 0x3f // max cmd nbr
+
+typedef enum
+{
+  VUSB_PORT_STAGE_NONE = 0,
+  VUSB_PORT_STAGE_START,
+  VUSB_PORT_STAGE_FINISHED,
+  VUSB_PORT_STAGE_SPI_START,
+  VUSB_PORT_STAGE_SPI_FINISHED
+}vusb_port_stage;
 
 
  /***********************************
@@ -201,12 +212,20 @@ struct vusb_req {
   struct vusb_ep* ep;
 };
 
+// the mcu supports 32 PIPES
+struct vusb_pipe {
+  u8  pipe_idx; // MCU device ID
+  u8  port;
+  struct vusb_ep* ep;
+  struct usb_gadget *gadget;
+};
+
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
   struct work_struct wk_udc_work; // port ep0 udc work start/stop
-  struct work_struct wk_data;  // ep data handling
-  struct work_struct wk_status; // ep status handling
+  struct work_struct wk_data;     // ep data handling
+  struct work_struct wk_status;   // ep status handling
   struct work_struct wk_irq_data; // mcu pipe
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
@@ -274,9 +293,7 @@ struct vusb_udc {
 
   struct usb_gadget gadget;
   struct vusb_ep ep[VUSB_MAX_EPS];
-  
-  struct vusb_req ep0req;
-  u8 ep0buf[64];
+ 
   struct usb_ctrlrequest setup;
 
   struct usb_gadget_driver* driver;

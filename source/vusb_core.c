@@ -446,7 +446,7 @@ static void vusb_port_start(struct work_struct* work)
 #ifdef DEBUG
 	if (vusb_read_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2)) {
 		uint8_t port = transfer[0];
-    dev_info(&udc->spi->dev, "Hub has initiated port %d", ep->port);
+    dev_info(&udc->spi->dev, "Hub port %d is in configured stage", ep->port);
 	}
 #else
   dev_info(&udc->spi->dev, "Port %d is enabled with control pipe: %d", ep->port, ep->pipe);
@@ -473,8 +473,8 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
 
   INIT_WORK(&ep->wk_udc_work, vusb_port_start);
 	schedule_work(&ep->wk_udc_work);
-
-  dev_info(&udc->spi->dev, "Hub vusb_udc_start on port:%d, index:%d", ep->port, ep->pipe);
+  //dev_info(&udc->spi->dev, "Hub vusb_udc_start on port:%d, index:%d",
+		//			ep->port, ep->pipe);
 
 	return 0;
 }
@@ -517,10 +517,80 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	return 0;
 }
 
+/*
+	This function enable and reserve the pipe on the mcu 
+*/
+static void vusb_allocate_pipe(struct work_struct* work)
+{
+  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
+  struct vusb_udc* udc = ep->udc;
+
+	// mark the hub port as spi active
+	// set the control pipe for the hub port
+	if (ep->ep_usb.caps.type_control)	{
+    //dev_info(&udc->spi->dev, "Hub vusb_allocate_pipe - port activation ep:%s on port:%d\n", ep->name, ep->port);
+    u8 transfer[10];
+    transfer[0] = ep->port; // port
+    transfer[1] = VUSB_PORT_STAGE_SPI_START;// activate spi configure stage
+		if (vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 2)) {
+      dev_info(&udc->spi->dev, "Hub port %d is now in spi stage", ep->port);
+    }
+    dev_info(&udc->spi->dev, "  - port: %d with cpipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+		return;
+	}
+	// find the next free pipe
+  // enable the pipe on the mcu
+	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+
+}
+
+static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
+	struct usb_endpoint_descriptor* desc,
+	struct usb_ss_ep_comp_descriptor* ep_comp)
+{
+  struct vusb_udc* udc = gadget_to_udc(gadget);
+  struct usb_ep* _ep;
+	struct vusb_ep* ep;
+
+  /* Look at endpoints until an unclaimed one looks usable */
+  list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
+    if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
+      goto found_ep;
+  }
+  /* Fail */
+  return NULL;
+
+found_ep:
+
+	if (udc->ep[0].todo == START)
+	{
+		unsigned int flags;
+    spin_lock_irqsave(&udc->lock, flags);
+		udc->ep[0].todo = 0;
+    spin_unlock_irqrestore(&udc->lock, flags);
+
+		INIT_WORK(&udc->ep[0].wk_udc_work, vusb_allocate_pipe);
+    schedule_work(&udc->ep[0].wk_udc_work);
+
+	}
+
+
+	ep = ep_usb_to_vusb_ep(_ep);
+  //dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
+
+  INIT_WORK(&ep->wk_udc_work, vusb_allocate_pipe);
+  schedule_work(&ep->wk_udc_work);
+
+	return _ep;
+
+}
+	
 static const struct usb_gadget_ops vusb_udc_ops = {
 	.udc_start	= vusb_udc_start,
 	.udc_stop	= vusb_udc_stop,
 	.wakeup		= vusb_wakeup,
+  .match_ep = vusb_match_ep,
+
 };
 
 static int vusb_probe(struct spi_device *spi)

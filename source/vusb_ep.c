@@ -50,11 +50,6 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
   return 0;
 }
 
-static int _vusb_ep_enable(struct work_struct* work)
-{
-  return 0;
-}
-
 static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descriptor* desc)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
@@ -71,8 +66,8 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, attrib:%x\n",
-         _ep->name, desc->bEndpointAddress, desc->bmAttributes);
+  dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, maxp:%x\n",
+         _ep->name, desc->bEndpointAddress, maxp);
 
   // schedule to work
   schedule_work(&ep->wk_status);
@@ -370,6 +365,7 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     if (idx == 0) { /* For EP0 */
  // ep->pipe = portnr - 1;
+      ep->todo = START;
       ep->ep_usb.desc = &ep0_desc;
       ep->ep_usb.maxpacket = usb_endpoint_maxp(&ep0_desc);
       ep->ep_usb.caps.type_control = true;
@@ -396,4 +392,5 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
   }
+
 }
