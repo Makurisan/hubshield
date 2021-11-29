@@ -524,22 +524,31 @@ static void vusb_allocate_pipe(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
   struct vusb_udc* udc = ep->udc;
+  u8 transfer[10];
 
 	// mark the hub port as spi active
 	// set the control pipe for the hub port
 	if (ep->ep_usb.caps.type_control)	{
     //dev_info(&udc->spi->dev, "Hub vusb_allocate_pipe - port activation ep:%s on port:%d\n", ep->name, ep->port);
-    u8 transfer[10];
-    transfer[0] = ep->port; // port
-    transfer[1] = VUSB_PORT_STAGE_SPI_START;// activate spi configure stage
-		if (vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 2)) {
-      dev_info(&udc->spi->dev, "Hub port %d is now in spi stage", ep->port);
-    }
+    transfer[0] = PORT_REG_DEVTYPE; // reg
+    transfer[1] = ep->port; // port
+    transfer[2] = VUSB_PORT_DEVICE_REMOTE; // field to set; activate remote or local device
+		vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+		// set port on control pipe
+		transfer[0] = REG_PIPE_PORT; // reg
+		transfer[1] = ep->pipe; // pipe num
+    transfer[2] = ep->port; // field to set
+    vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+		
+		dev_info(&udc->spi->dev, "Hub port %d is now in spi stage", ep->port);
     dev_info(&udc->spi->dev, "  - port: %d with cpipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
 		return;
 	}
-	// find the next free pipe
-  // enable the pipe on the mcu
+  // set port on control pipe
+  transfer[0] = REG_PIPE_PORT; // port
+  transfer[1] = ep->pipe; // pipe num
+  transfer[2] = ep->port; // port
+	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
 
 }
@@ -571,16 +580,11 @@ found_ep:
 
 		INIT_WORK(&udc->ep[0].wk_udc_work, vusb_allocate_pipe);
     schedule_work(&udc->ep[0].wk_udc_work);
-
 	}
-
-
 	ep = ep_usb_to_vusb_ep(_ep);
   //dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
-
   INIT_WORK(&ep->wk_udc_work, vusb_allocate_pipe);
   schedule_work(&ep->wk_udc_work);
-
 	return _ep;
 
 }

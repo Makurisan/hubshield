@@ -83,16 +83,21 @@ enum vusb_req_code {
 #define VUSB_REG_MAP_PORT_SET		  0x1b
 #define VUSB_REG_MAP_PORT_GET		  0x1c
 
+// register map port
+#define VUSB_REG_MAP_PIPE_SET		  0x1d
+#define VUSB_REG_MAP_PIPE_GET		  0x1e
+
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
-typedef enum
-{
-  VUSB_PORT_STAGE_NONE = 0,
-  VUSB_PORT_STAGE_START,
-  VUSB_PORT_STAGE_FINISHED,
-  VUSB_PORT_STAGE_SPI_START,
-  VUSB_PORT_STAGE_SPI_FINISHED
-}vusb_port_stage;
+#define REG_MAP_PIPE 3
+  #define REG_PIPE_PORT		2
+  #define REG_PIPE_SPFIFO 3
+  #define REG_PIPE_ID		  4
+
+
+#define REG_MAP_PIPE 3
+  #define PORT_REG_PORT			 5	
+  #define PORT_REG_DEVTYPE   6   // uint8
 
 
  /***********************************
@@ -192,6 +197,13 @@ typedef enum
 #define gadget_to_udc(g)		container_of((g), struct vusb_udc, gadget)
 #define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
 
+
+typedef enum
+{
+  VUSB_PORT_DEVICE_NONE = 0,
+  VUSB_PORT_DEVICE_LOCAL,
+  VUSB_PORT_DEVICE_REMOTE
+}port_device_type;
 
 // register data map
 #pragma pack(1)
