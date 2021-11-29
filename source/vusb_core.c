@@ -440,17 +440,22 @@ static void vusb_port_start(struct work_struct* work)
   struct vusb_udc* udc = ep->udc;
 
   u8 transfer[24];
-  transfer[0] = ep->port; // port
-  transfer[1] = VUSB_TYPE_CTRL; // pipe type 0 is ctrl ep
-	// we need a separate function to activate ep0
-#ifdef DEBUG
-	if (vusb_read_buffer(udc, VUSB_REG_PIPE_EP_ENABLE, transfer, sizeof(u8) * 2)) {
-		uint8_t port = transfer[0];
-    dev_info(&udc->spi->dev, "Hub port %d is in configured stage", ep->port);
-	}
-#else
-  dev_info(&udc->spi->dev, "Port %d is enabled with control pipe: %d", ep->port, ep->pipe);
-#endif // _DEBUG
+
+  // set enable on control pipe
+  transfer[0] = REG_PIPE_ENABLED; // reg
+  transfer[1] = ep->pipe; // pipe num
+  transfer[2] = 1;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+  dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
+
+  // set enable on port
+  transfer[0] = PORT_REG_ENABLE; // reg
+  transfer[1] = ep->port; // port
+  transfer[2] = 1;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+  //dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
+
+
 }
 
 static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *driver)
@@ -526,30 +531,28 @@ static void vusb_allocate_pipe(struct work_struct* work)
   struct vusb_udc* udc = ep->udc;
   u8 transfer[10];
 
-	// mark the hub port as spi active
-	// set the control pipe for the hub port
+	// set the hub port in the case of the control pipe
 	if (ep->ep_usb.caps.type_control)	{
-    //dev_info(&udc->spi->dev, "Hub vusb_allocate_pipe - port activation ep:%s on port:%d\n", ep->name, ep->port);
-    transfer[0] = PORT_REG_DEVTYPE; // reg
+		// remote or local port
+		transfer[0] = PORT_REG_DEVTYPE; // reg
     transfer[1] = ep->port; // port
     transfer[2] = VUSB_PORT_DEVICE_REMOTE; // field to set; activate remote or local device
 		vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-		// set port on control pipe
-		transfer[0] = REG_PIPE_PORT; // reg
-		transfer[1] = ep->pipe; // pipe num
-    transfer[2] = ep->port; // field to set
-    vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-		
 		dev_info(&udc->spi->dev, "Hub port %d is now in spi stage", ep->port);
-    dev_info(&udc->spi->dev, "  - port: %d with cpipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
-		return;
+		
 	}
   // set port on control pipe
-  transfer[0] = REG_PIPE_PORT; // port
+  transfer[0] = REG_PIPE_PORT; // reg
   transfer[1] = ep->pipe; // pipe num
   transfer[2] = ep->port; // port
 	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+
+  // set the pipe type
+  transfer[0] = REG_PIPE_TYPE; // reg
+  transfer[1] = ep->pipe; // pipe num
+  transfer[2] = ep->ep_usb.caps.type_control?USB_EP_CONTROL:USB_EP_INTERRUPT; // field to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
 }
 

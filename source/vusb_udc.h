@@ -89,15 +89,27 @@ enum vusb_req_code {
 
 #define VUSB_REG_MAX 0x3f // max cmd nbr
 
+// register map PIPE on the mcu
 #define REG_MAP_PIPE 3
-  #define REG_PIPE_PORT		2
-  #define REG_PIPE_SPFIFO 3
-  #define REG_PIPE_ID		  4
+#define REG_PIPE_TYPE		0
+#define REG_PIPE_ENABLED	1
+#define PIPUSED		BIT(1) // used
+#define PIPENABLE	BIT(0) // enable
 
+#define REG_PIPE_PORT		2
+#define REG_PIPE_SPFIFO 3
+#define REG_PIPE_ID		  4
 
-#define REG_MAP_PIPE 3
-  #define PORT_REG_PORT			 5	
-  #define PORT_REG_DEVTYPE   6   // uint8
+// register map PORT on the mcu
+
+#define REG_MAP_PORT 2	
+#define PORT_REG_TYPE			 0   // uint8
+#define PORT_REG_ENABLE		 1
+#define PORT_REG_ADDRESS	 2   // uint8
+#define PORT_REG_STATUS1 	 3   // uint16
+#define PORT_REG_STATUS2 	 4   // uint16
+#define PORT_REG_PORT			 5	
+#define PORT_REG_DEVTYPE   6   // uint8
 
 
  /***********************************
@@ -196,6 +208,15 @@ enum vusb_req_code {
 
 #define gadget_to_udc(g)		container_of((g), struct vusb_udc, gadget)
 #define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
+
+
+typedef enum
+{
+  USB_EP_CONTROL,
+  USB_EP_ISOCHRONOUS,
+  USB_EP_BULK,
+  USB_EP_INTERRUPT
+}usb_endpoint_descriptor;
 
 
 typedef enum
