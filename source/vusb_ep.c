@@ -110,7 +110,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   spin_unlock_irqrestore(&ep->lock, flags);
 
   schedule_work(&ep->wk_status);
-  dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
+  //dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
 
   return 0;
 }
@@ -276,13 +276,13 @@ static void vusb_ep_status(struct work_struct* work)
 {
   unsigned long flags;
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_status);
-  
+  u8 transfer[24];
+
   if (ep->todo & ENABLE_EP) {
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
-    u8 transfer[24];
     UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
       ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
 
@@ -310,7 +310,20 @@ static void vusb_ep_status(struct work_struct* work)
       sizeof(u8) * 2 + sizeof(struct usb_endpoint_descriptor));
 
   } else
+    if (ep->todo & DISABLE) {
+      UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
+        ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
+
+      // set the pipe enable
+      transfer[0] = REG_PIPE_ENABLED; // reg
+      transfer[1] = ep->pipe; // pipe num
+      transfer[2] = 0;			  // field to set
+      vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
+    }    
+  else
   if (ep->todo & STALL_EP) {
+
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~STALL_EP;
     spin_unlock_irqrestore(&ep->lock, flags);

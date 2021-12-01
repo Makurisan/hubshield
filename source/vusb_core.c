@@ -488,15 +488,19 @@ static void vusb_port_stop(struct work_struct* work)
 {
 	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
 	struct vusb_udc* udc = ep->udc;
-  dev_info(&udc->spi->dev, "Device on port %d is detached", ep->port);
+  dev_info(&udc->spi->dev, "Port %d will be detached", ep->port);
 
   u8 transfer[24];
-  transfer[0] = ep->port; // port
-  transfer[1] = VUSB_TYPE_CTRL;
+	// set disable on port
+  transfer[0] = PORT_REG_ENABLED; // reg
+  transfer[1] = ep->port; // port
+  transfer[2] = 0;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
-	if (vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2)) {
-    dev_info(&udc->spi->dev, "Device on port %d is detached", ep->port);
-  }
+	// detach the port
+	transfer[0] = ep->port; // port
+  transfer[1] = VUSB_TYPE_CTRL;
+	vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2);
 
 }
 
