@@ -93,7 +93,6 @@ enum vusb_req_code {
 #define REG_MAP_PIPE 3
 #define REG_PIPE_TYPE		0
 #define REG_PIPE_ENABLED	1
-
 #define REG_PIPE_PORT		2
 #define REG_PIPE_SPFIFO 3
 #define REG_PIPE_ID		  4
