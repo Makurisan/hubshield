@@ -51,14 +51,14 @@ typedef struct vusb_send {
   uint8_t cmdst[0x40];
   uint8_t port;
   uint8_t length;
-  uint8_t spi;
+  uint8_t devtype;
 }vusb_send_t;
 const vusb_send_t vusb_send_tab[] = { 
     { "r",   /*cmd*/ VUSB_REG_RESET,      "REG_RESET",      /*port*/ 0, 1, 0},
     { "a",   /*cmd*/ VUSB_REG_HWATTACH,   "REG_HWATTACH",   /*port*/ 0, 1, 0},
     { "d",   /*cmd*/ VUSB_REG_HWDETACH,   "REG_HWDETACH",   /*port*/ 1, 1, 0},
-    { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",/*port*/ 0, 3, 1},
-    { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",/*port*/ 0, 3, 1},
+    { "+",  /*cmd*/ VUSB_REG_PORT_ATTACH, "REG_PORT_ATTACH",/*port*/ 0, 3, VUSB_PORT_DEVICE_REMOTE},
+    { "-",  /*cmd*/ VUSB_REG_PORT_DETACH, "REG_PORT_DETACH",/*port*/ 0, 3, VUSB_PORT_DEVICE_REMOTE},
    // debug                                                            
     { "p",   /*cmd*/ VUSB_REG_MEMORY,   "REG_MEMORY",       /*port*/ 0, 1, 0},
     { "s",   /*cmd*/ VUSB_REG_PRINTF,   "REG_PRINTF",       /*port*/ 0, 1, 0},
@@ -122,7 +122,7 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
             kstrtou8(&data[i + 1], 10, &udc->transfer[1]);
           }
           if (udc->transfer[1] <= 2)
-            udc->transfer[2] = vusb_send_tab[j].spi; // spi activate
+            udc->transfer[2] = vusb_send_tab[j].devtype; // spi activate
         }
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
         //msleep_interruptible(100);

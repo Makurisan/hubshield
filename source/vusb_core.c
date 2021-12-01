@@ -449,7 +449,7 @@ static void vusb_port_start(struct work_struct* work)
   dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
 
   // set enable on port
-  transfer[0] = PORT_REG_ENABLE; // reg
+  transfer[0] = PORT_REG_ENABLED; // reg
   transfer[1] = ep->port; // port
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
@@ -551,8 +551,15 @@ static void vusb_allocate_pipe(struct work_struct* work)
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg
   transfer[1] = ep->pipe; // pipe num
-  transfer[2] = ep->ep_usb.caps.type_control?USB_EP_CONTROL:USB_EP_INTERRUPT; // field to set
+  transfer[2] = ep->ep_usb.caps.type_control?REG_EP_CONTROL:REG_EP_INTERRUPT; // field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
+  // set the pipe type
+  transfer[0] = REG_PIPE_MAXPKTS; // reg
+  transfer[1] = ep->pipe; // pipe num
+  transfer[2] = 0x40;			// field to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
 
 }
 
@@ -651,10 +658,6 @@ static int vusb_probe(struct spi_device *spi)
 	mutex_init(&udc->spi_read_mutex);
 	mutex_init(&udc->spi_write_mutex);
 
-	//udc->ep0req.ep = &udc->ep[0];
-	//udc->ep0req.usb_req.buf = udc->ep0buf;
-	//INIT_LIST_HEAD(&udc->ep0req.queue);
-
 	/* setup Endpoints */
 	vusb_eps_init(udc);
 
@@ -702,8 +705,7 @@ static int vusb_probe(struct spi_device *spi)
   dev_info(&udc->spi->dev, "GPIO for mcu listen hwirq %d is irq %d.\n", GPIO_LISTEN_IRQ_PIN, udc->mcu_irq);
   rc = devm_request_threaded_irq(&udc->spi->dev, udc->mcu_irq, NULL,
     vusb_mcu_irq, IRQF_SHARED | IRQF_ONESHOT | IRQF_NO_SUSPEND | IRQF_TRIGGER_FALLING, "vusbirq", udc);
-  if (rc)
-  {
+  if (rc) {
     dev_err(&udc->spi->dev, "Failed to request listen hwirq interrupt\n");
     rc = -ENOMEM;
     goto err;
@@ -717,6 +719,14 @@ static int vusb_probe(struct spi_device *spi)
   dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%x\n", udc->mcu_gpreset);
   gpiod_set_value(udc->mcu_gpreset, 1);
 #endif
+
+#ifdef _DEBUG
+	gpiod_set_value(udc->mcu_gpreset, 0);
+	msleep_interruptible(500);
+	gpiod_set_value(udc->mcu_gpreset, 1);
+	msleep_interruptible(100);
+#endif // _DEBUG
+
 
 	udc->is_selfpowered = 1;
 	udc->todo |= UDC_START;
