@@ -378,7 +378,6 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			transfer[0] = REG_USBIRQ;
 			transfer[1] = URESIRQ;
 			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
-			//vusb_spi_pipe_attach(udc, 1);
 			return;
 		}
 		if (usbirq & HRESIRQ) {
@@ -441,12 +440,25 @@ static void vusb_port_start(struct work_struct* work)
 
   u8 transfer[24];
 
+	// control pipe
+	
+	transfer[0] = REG_PIPE_PORT; // reg
+  transfer[1] = ep->pipe; // pipe num
+  transfer[2] = ep->port; // port
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
   // set enable on control pipe
   transfer[0] = REG_PIPE_ENABLED; // reg
   transfer[1] = ep->pipe; // pipe num
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-  dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
+  dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+
+  // remote or local port
+  transfer[0] = PORT_REG_DEVTYPE; // reg
+  transfer[1] = ep->port; // port
+  transfer[2] = VUSB_PORT_DEVICE_REMOTE; // field to set; activate remote or local device
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
   // set enable on port
   transfer[0] = PORT_REG_ENABLED; // reg
@@ -455,6 +467,7 @@ static void vusb_port_start(struct work_struct* work)
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
   //dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
 
+	dev_info(&udc->spi->dev, "Hub port %d is now in remote stage and enabled", ep->port);
 
 }
 
@@ -478,8 +491,8 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
 
   INIT_WORK(&ep->wk_udc_work, vusb_port_start);
 	schedule_work(&ep->wk_udc_work);
-  //dev_info(&udc->spi->dev, "Hub vusb_udc_start on port:%d, index:%d",
-		//			ep->port, ep->pipe);
+
+	//dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start\n");
 
 	return 0;
 }
@@ -521,41 +534,31 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
   INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
   schedule_work(&ep->wk_udc_work);
 
-
   dev_info(&udc->spi->dev, "Hub gadget vusb_udc_stop.\n");
 	return 0;
 }
 
 /*
-	This function enable and reserve the pipe on the mcu 
+	This function predefines and reserve the endpoint pipes on the mcu 
 */
-static void vusb_allocate_pipe(struct work_struct* work)
+static void vusb_configure_pipe(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
   struct vusb_udc* udc = ep->udc;
   u8 transfer[10];
 
-	// set the hub port in the case of the control pipe
-	if (ep->ep_usb.caps.type_control)	{
-		// remote or local port
-		transfer[0] = PORT_REG_DEVTYPE; // reg
-    transfer[1] = ep->port; // port
-    transfer[2] = VUSB_PORT_DEVICE_REMOTE; // field to set; activate remote or local device
-		vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-		dev_info(&udc->spi->dev, "Hub port %d is now in spi stage", ep->port);
-		
-	}
   // set port on control pipe
   transfer[0] = REG_PIPE_PORT; // reg
   transfer[1] = ep->pipe; // pipe num
   transfer[2] = ep->port; // port
 	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
 	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
 
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg
   transfer[1] = ep->pipe; // pipe num
-  transfer[2] = ep->ep_usb.caps.type_control?REG_EP_CONTROL:REG_EP_INTERRUPT; // field to set
+  transfer[2] = REG_EP_INTERRUPT; // field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
   // set the pipe type
@@ -563,7 +566,6 @@ static void vusb_allocate_pipe(struct work_struct* work)
   transfer[1] = ep->pipe; // pipe num
   transfer[2] = 0x40;			// field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
 
 }
 
@@ -585,20 +587,13 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
 
 found_ep:
 
-	if (udc->ep[0].todo == START)
-	{
-		unsigned int flags;
-    spin_lock_irqsave(&udc->lock, flags);
-		udc->ep[0].todo = 0;
-    spin_unlock_irqrestore(&udc->lock, flags);
-
-		INIT_WORK(&udc->ep[0].wk_udc_work, vusb_allocate_pipe);
-    schedule_work(&udc->ep[0].wk_udc_work);
-	}
+	// schedule the ep
 	ep = ep_usb_to_vusb_ep(_ep);
-  dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
-  INIT_WORK(&ep->wk_udc_work, vusb_allocate_pipe);
+  INIT_WORK(&ep->wk_udc_work, vusb_configure_pipe);
   schedule_work(&ep->wk_udc_work);
+
+  //dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
+
 	return _ep;
 
 }

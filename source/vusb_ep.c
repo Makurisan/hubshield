@@ -390,7 +390,6 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     if (idx == 0) { /* For EP0 */
  // ep->pipe = portnr - 1;
-      ep->todo = START;
       ep->ep_usb.desc = &ep0_desc;
       ep->ep_usb.maxpacket = usb_endpoint_maxp(&ep0_desc);
       ep->ep_usb.caps.type_control = true;
