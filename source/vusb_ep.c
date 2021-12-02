@@ -303,12 +303,6 @@ static void vusb_ep_status(struct work_struct* work)
     transfer[2] = 1;			  // field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-    transfer[0] = ep->port; // octopus port
-    transfer[1] = ep->pipe; // octopus pipe
-    memmove(&transfer[2], ep->ep_usb.desc, sizeof(struct usb_endpoint_descriptor));
-    vusb_write_buffer(ep->udc, VUSB_REG_PIPE_EP_ENABLE, transfer,
-      sizeof(u8) * 2 + sizeof(struct usb_endpoint_descriptor));
-
   } else
     if (ep->todo & DISABLE) {
       UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x, epaddr:%x\n",

@@ -75,7 +75,6 @@ enum vusb_req_code {
 // pipe register
 #define VUSB_REG_PIPE_GET_DATA    0x15
 #define VUSB_REG_PIPE_WRITE_DATA  0x17
-#define VUSB_REG_PIPE_EP_ENABLE   0x18
 #define VUSB_REG_PIPE_MAXPKTSIZE  0x19
 #define VUSB_REG_PORT_ENABLE      0x1a
 

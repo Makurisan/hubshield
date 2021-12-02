@@ -498,9 +498,9 @@ static void vusb_port_stop(struct work_struct* work)
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
 	// detach the port
-	transfer[0] = ep->port; // port
-  transfer[1] = VUSB_TYPE_CTRL;
-	vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2);
+	//transfer[0] = ep->port; // port
+ // transfer[1] = VUSB_TYPE_CTRL;
+	//vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2);
 
 }
 
@@ -596,7 +596,7 @@ found_ep:
     schedule_work(&udc->ep[0].wk_udc_work);
 	}
 	ep = ep_usb_to_vusb_ep(_ep);
-  //dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
+  dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
   INIT_WORK(&ep->wk_udc_work, vusb_allocate_pipe);
   schedule_work(&ep->wk_udc_work);
 	return _ep;
