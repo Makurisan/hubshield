@@ -110,7 +110,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   spin_unlock_irqrestore(&ep->lock, flags);
 
   schedule_work(&ep->wk_status);
-  //dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
+  dev_info(ep->udc->dev, "vusb_ep_disable %s\n", ep->name);
 
   return 0;
 }
@@ -283,7 +283,7 @@ static void vusb_ep_status(struct work_struct* work)
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
-    UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
+    UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
       ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
 
     // set the pipe endpoint address
@@ -305,7 +305,7 @@ static void vusb_ep_status(struct work_struct* work)
 
   } else
     if (ep->todo & DISABLE) {
-      UDCVDBG(ep->udc, "vusb_ep_state name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
+      UDCVDBG(ep->udc, "vusb_ep_state disable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
         ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
 
       // set the pipe enable
@@ -330,39 +330,6 @@ static void vusb_ep_status(struct work_struct* work)
 
 }
 
-
-struct pipe_ch_cfg {
-  int				ep_port;
-  int				ep_num;
-  int				ep_type;
-  int				dir;
-  int				n_fifo_slots;
-  int				max_pkt_fs;
-};
-
-#define VUSB_CTRL		0x00
-#define VUSB_ISOC		0x01
-#define VUSB_BULK		0x02
-#define VUSB_INTR		0x03
-
-#define VUSB_OUT		0x00
-#define VUSB_IN			0x01
-
-static const struct pipe_ch_cfg pipe_defaults[] = {
-
-  /* 
-    
-        ep_port       ep_type         n_fifo_slots    
-  idx      |  n_pipe    |       dir       |    max_pkt_fs 
-   |       |    |       |        |        |      |        */
-  [0] = {  1,   2, VUSB_CTRL, VUSB_OUT,  32,    64, },
-  [1] = {  1,   3, VUSB_INTR, VUSB_OUT,  32,    64, },
-  [2] = {  1,   4, VUSB_INTR, VUSB_IN,  128,   512, },
-  [3] = {  2,   5, VUSB_CTRL, VUSB_IN,  128,   512, },
-  [4] = {  2,   6, VUSB_INTR, VUSB_OUT,  32,    64, },
-  [5] = {  2,   7, VUSB_INTR, VUSB_IN,   32,    64, },
-};
-
 void vusb_eps_init(struct vusb_udc* udc)
 {
   int idx;
@@ -377,7 +344,7 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     ep->udc = udc;
     ep->id = idx;
-    ep->port = 1; // port on the mcu
+    ep->port = 2; // port on the mcu
     ep->halted = 0;
     ep->maxpacket = 0;
     ep->ep_usb.name = ep->name;

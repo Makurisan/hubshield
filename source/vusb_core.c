@@ -501,7 +501,7 @@ static void vusb_port_stop(struct work_struct* work)
 {
 	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
 	struct vusb_udc* udc = ep->udc;
-  dev_info(&udc->spi->dev, "Port %d will be detached", ep->port);
+  //dev_info(&udc->spi->dev, "Port %d will be detached", ep->port);
 
   u8 transfer[24];
 	// set disable on port
@@ -529,7 +529,7 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
   INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
   schedule_work(&ep->wk_udc_work);
 
-  dev_info(&udc->spi->dev, "Hub gadget vusb_udc_stop.\n");
+  dev_info(&udc->spi->dev, "Hub device on port: %d is removed.\n", ep->port);
 	return 0;
 }
 
