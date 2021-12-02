@@ -510,11 +510,6 @@ static void vusb_port_stop(struct work_struct* work)
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
-	// detach the port
-	//transfer[0] = ep->port; // port
- // transfer[1] = VUSB_TYPE_CTRL;
-	//vusb_write_buffer(udc, VUSB_REG_PORT_DETACH, transfer, sizeof(u8) * 2);
-
 }
 
 static int vusb_udc_stop(struct usb_gadget *gadget)
