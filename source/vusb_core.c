@@ -504,7 +504,7 @@ static void vusb_dev_nuke(struct vusb_udc* udc, int status)
   unsigned int i;
 
   for (i = 0; i < VUSB_MAX_EPS; i++) {
-		vusb_nuke(&udc->ep[i], -ESHUTDOWN);
+		vusb_nuke(&udc->ep[i], status);
   }
 }
 
