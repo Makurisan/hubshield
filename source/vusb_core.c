@@ -497,6 +497,17 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
 	return 0;
 }
 
+void vusb_nuke(struct vusb_ep* ep, int status);
+
+static void vusb_dev_nuke(struct vusb_udc* udc, int status)
+{
+  unsigned int i;
+
+  for (i = 0; i < VUSB_MAX_EPS; i++) {
+		vusb_nuke(&udc->ep[i], -ESHUTDOWN);
+  }
+}
+
 static void vusb_port_stop(struct work_struct* work)
 {
 	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
@@ -510,6 +521,7 @@ static void vusb_port_stop(struct work_struct* work)
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
+	vusb_dev_nuke(udc, -ESHUTDOWN);
 }
 
 static int vusb_udc_stop(struct usb_gadget *gadget)

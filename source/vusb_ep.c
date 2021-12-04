@@ -210,7 +210,6 @@ static const struct usb_endpoint_descriptor ep0_desc = {
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
 {
   int idx;
-
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &udc->ep[idx];
     if (ep->pipe == ep_idx) {
