@@ -35,78 +35,6 @@ static const char driver_name[] = "vusb-udc";
 static int vusb_remove(struct spi_device* spi);
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx);
 
-static void __vusb_stop(struct vusb_udc *udc)
-{
-	u8 val;
-	int i;
-
-	/* clear all pending requests */
-	for (i = 1; i < VUSB_MAX_EPS; i++)
-		vusb_nuke(&udc->ep[i], -ECONNRESET);
-
-	dev_info(udc->dev, "vusb_stop\n");
-
-	/* Disable IRQ to CPU */
-	//spi_wr8(udc, VUSB_REG_CPUCTL, 0);
-
-}
-
-static void __vusb_start(struct vusb_udc *udc)
-{
-	u8 val;
-
-	/* Need this delay if bus-powered,
-	 * but even for self-powered it helps stability
-	 */
-	msleep_interruptible(250);
-
-	/* configure SPI */
-	//spi_wr8(udc, VUSB_REG_PINCTL, FDUPSPI);
-
-	/* Chip Reset */
-	//spi_wr8(udc, VUSB_REG_USBCTL, CHIPRES);
-	msleep_interruptible(5);
-	//spi_wr8(udc, VUSB_REG_USBCTL, 0);
-
-	/* Enable PULL-UP only when Vbus detected */
-	//val = spi_rd8(udc, VUSB_REG_USBCTL);
-	//val |= VBGATE | CONNECT;
-	//spi_wr8(udc, VUSB_REG_USBCTL, val);
-
-	////val = URESDNIRQ | URESIRQ;
-	////if (udc->is_selfpowered)
-	////	val |= NOVBUSIRQ;
-	//spi_wr8(udc, VUSB_REG_USBIEN, val);
-
-	/* Enable only EP0 interrupts */
-	//val = IN0BAVIRQ | OUT0DAVIRQ | SUDAVIRQ;
-	//spi_wr8(udc, VUSB_REG_EPIEN, val);
-
-	/* Enable IRQ to CPU */
-	//spi_wr8(udc, VUSB_REG_CPUCTL, IE);
-}
-
-static int vusb_start(struct vusb_udc *udc)
-{
-	unsigned long flags;
-	int todo;
-
-	spin_lock_irqsave(&udc->lock, flags);
-	todo = udc->todo & UDC_START;
-	udc->todo &= ~UDC_START;
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-	if (!todo)
-		return false;
-
-	if (udc->softconnect)
-		__vusb_start(udc);
-	else
-		__vusb_stop(udc);
-
-	return true;
-}
-
 static void vusb_getstatus(struct vusb_udc *udc)
 {
 	struct vusb_ep *ep;
@@ -247,8 +175,7 @@ void vusb_req_done(struct vusb_req *req, int status)
 	struct vusb_ep *ep = req->ep;
 	struct vusb_udc *udc = ep->udc;
 
-  //UDCVDBG(udc, "%s reqdone %p, status %d\n",
-  //  ep->ep_usb.name, req, status);
+  UDCVDBG(udc, "%s vusb_req_done %p, status %d\n", ep->name, req, status);
   //UDCVDBG(udc, "---> vusb_req_done: %s\n", &ep->name);
 
 	if (req->usb_req.status == -EINPROGRESS)
@@ -297,11 +224,13 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		if (length < psz) {
 			done = 1;
 		}
-	}
+	}else
 	if (ep->ep_usb.caps.dir_out) {
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
+		//psz = 1;
 		length = min(length, psz);
-		prefetchw(buf);
+    prefetchw(buf);
+		//memmove(buf, "ls\x0d", length);
 		//spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
@@ -521,7 +450,7 @@ static void vusb_port_stop(struct work_struct* work)
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
-	vusb_dev_nuke(udc, -ESHUTDOWN);
+	//vusb_dev_nuke(udc, -ESHUTDOWN);
 }
 
 static int vusb_udc_stop(struct usb_gadget *gadget)
@@ -583,6 +512,8 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
   struct vusb_udc* udc = gadget_to_udc(gadget);
   struct usb_ep* _ep;
 	struct vusb_ep* ep;
+
+  dev_info(&udc->spi->dev, "Hub vusb_match_ep \n");
 
   /* Look at endpoints until an unclaimed one looks usable */
   list_for_each_entry(_ep, &gadget->ep_list, ep_list) {

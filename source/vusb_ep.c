@@ -66,8 +66,8 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  //dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, maxp:%x\n",
-  //       _ep->name, desc->bEndpointAddress, maxp);
+  dev_info(&ep->udc->spi->dev, "vusb_ep_enable name:%s, addr: %x, maxp:%x\n",
+         _ep->name, desc->bEndpointAddress, maxp);
 
   // schedule to work
   schedule_work(&ep->wk_status);
@@ -143,6 +143,9 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   struct vusb_udc* udc = ep->udc;
   unsigned long flags;
 
+  if (unlikely(!_req || !_req->complete || !_req->buf || !_ep))
+    return -EINVAL;
+
   _req->status = -EINPROGRESS;
   _req->actual = 0;
 
@@ -158,9 +161,10 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
 
   spin_lock_irqsave(&ep->lock, flags);
   list_add_tail(&req->queue, &ep->queue);
-  schedule_work(&ep->wk_data);
   spin_unlock_irqrestore(&ep->lock, flags);
-  //dev_info(udc->dev, "vusb_ep_queue, name: %s pipe: %d\n", ep->name, ep->pipe);
+
+  schedule_work(&ep->wk_data);
+  //dev_info(udc->dev, "vusb_ep_queue, name: %s pipe: %d, cnt:%d\n", ep->name, ep->pipe, list_empty(&ep->queue));
 
   return 0;
 }
@@ -224,29 +228,29 @@ static void vusb_ep_irq_data(struct work_struct* work)
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_irq_data);
   struct vusb_udc* udc = ep->udc;
 
-  u8 transfer[24];
-  transfer[0] = ep->port; // octopus port
-  transfer[1] = ep->pipe; // octopus pipe
-  if (vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + sizeof(struct usb_ctrlrequest))) {
+  if (ep->ep_usb.caps.type_control) {
+    u8 transfer[24];
+    transfer[0] = ep->port; // octopus port
+    transfer[1] = ep->pipe; // octopus pipe
+    vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + sizeof(struct usb_ctrlrequest));
+    struct usb_ctrlrequest setup;
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    struct vusb_ep* _ep = vusb_get_ep(ep->udc, (u8)cmd->data[0]);
-    if (_ep == ep) {
-      if (ep->ep_usb.caps.type_control) {
-        struct usb_ctrlrequest setup;
-        memmove(&setup, &cmd->data[sizeof(u8)], sizeof(struct usb_ctrlrequest));
-        // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
-        vusb_handle_setup(ep->udc, ep, setup);
-      }
-      else {
-        // OUT data from the mcu...
-        UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d\n", ep->name, ep->pipe);
-        pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
-      }
-    }
-    else {
-      UDCVDBG(ep->udc, "vusb_ep_irq_data: Error: %s, %s\n", ep->name, _ep->name);
-    }
+    memmove(&setup, &cmd->data[sizeof(u8)], sizeof(struct usb_ctrlrequest));
+    // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
+    vusb_handle_setup(ep->udc, ep, setup);
+  } else
+  if (ep->ep_usb.caps.dir_out && !ep->ep_usb.caps.type_control) {
+    u8 transfer[64];
+    // OUT data from the mcu...
+    transfer[0] = ep->port; // octopus port
+    transfer[1] = ep->pipe; // octopus pipe
+    vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + 2 * sizeof(u8));
+    spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+    UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->pipe, ep->maxpacket);
+    pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
+    //vusb_do_data(ep->udc, ep);
   }
+
 }
 
 static void vusb_ep_data(struct work_struct* work)
@@ -259,13 +263,21 @@ static void vusb_ep_data(struct work_struct* work)
   }
   else
   if (ep->ep_usb.caps.dir_out) {
-    dev_info(ep->udc->dev, "vusb_ep_data ep-out: %s, pipe: %d\n", ep->name, ep->pipe);
     //vusb_do_data(ep->udc, ep);
+    struct vusb_req* req;
+    void* buf;
+    req = list_first_entry(&ep->queue, struct vusb_req, queue);
+    buf = req->usb_req.buf + req->usb_req.actual;
+    int length = req->usb_req.length - req->usb_req.actual;
+    //pr_hex_mark_debug(buf, length, PRINTF_READ, ep->name, "ep_data");
+    dev_info(ep->udc->dev, "vusb_ep_data lengt: %d, actual: %d, req:%x\n",
+      req->usb_req.length, req->usb_req.actual, req);
+
   }
   else
   if (ep->ep_usb.caps.dir_in) {
     dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->pipe);
-    //vusb_do_data(ep->udc, ep);
+    vusb_do_data(ep->udc, ep);
   }
 
 }
@@ -282,8 +294,14 @@ static void vusb_ep_status(struct work_struct* work)
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
-    UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
-      ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
+    UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
+      ep->name, ep->pipe, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
+
+    // max packetsize
+    transfer[0] = REG_PIPE_MAXPKTS; // reg
+    transfer[1] = ep->pipe; // pipe num
+    transfer[2] = ep->ep_usb.desc->wMaxPacketSize;			// field to set
+    vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
     // set the pipe endpoint address
     transfer[0] = REG_PIPE_EPADDRESS; // reg
@@ -378,7 +396,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     }
     ep->ep_usb.caps.type_iso = false;
     ep->ep_usb.caps.type_int = true;
-    ep->ep_usb.caps.type_bulk = false;
+    ep->ep_usb.caps.type_bulk = true;
 
     list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
   }
