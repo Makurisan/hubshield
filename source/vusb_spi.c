@@ -39,11 +39,19 @@ void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port)
   vusb_write_buffer(udc, VUSB_REG_PORT_ATTACH, udc->spitransfer, sizeof(u8) * 2);
 }
 
-void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq)
+void vusb_spi_pipe_ack(struct vusb_udc* udc, struct vusb_ep *ep)
 {
+#ifdef _DEBUG
   udc->spitransfer[0] = REG_PIPEIRQ;
   *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
   vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+#endif // _DEBUG
+  u8 transfer[10];
+  // set port on control pipe
+  transfer[0] = REG_PIPE_CMD; // reg
+  transfer[1] = ep->idx; // pipe num
+  transfer[2] = 0x02; // cmd value 0x2 = ack, 0x1 = stall
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 }
 
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id)

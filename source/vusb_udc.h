@@ -90,14 +90,17 @@ enum vusb_req_code {
 
 // register map PIPE on the mcu
 #define REG_MAP_PIPE 3
-#define REG_PIPE_TYPE		0
-#define REG_PIPE_ENABLED	1
-#define REG_PIPE_PORT		2
-#define REG_PIPE_SPFIFO 3
-#define REG_PIPE_ID		  4
-#define REG_PIPE_MAXPKTS 5
-#define REG_PIPE_INTERVAL 6
-#define REG_PIPE_EPADDRESS  7
+#define REG_PIPE_TYPE		   0
+#define REG_PIPE_ENABLED	 1
+#define REG_PIPE_PORT		   2
+#define REG_PIPE_CMD		   3
+#define REG_PIPE_FIFO		   4
+#define REG_PIPE_FIFIDX	   5
+#define REG_PIPE_SPFIFO    6
+#define REG_PIPE_ID			   7
+#define REG_PIPE_MAXPKTS   8
+#define REG_PIPE_INTERVAL  9
+#define REG_PIPE_EPADDRESS 10
 
 // register map PORT on the mcu
 
@@ -196,6 +199,7 @@ enum vusb_req_code {
 #define STALL_EP	GENMASK(10, 9)
 #define	STALL		(1 << 9)
 #define	UNSTALL		(3 << 9)
+#define USB_DIR_BOTH			0x88
 
 #define CRC8_TABLE_SIZE   256
 #define VUSB_MAX_CHAR_DEVICES 3
@@ -261,12 +265,13 @@ struct vusb_ep {
   struct work_struct wk_irq_data; // mcu pipe
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
-  int pipe; // pipe index on MCU
+  int idx; // pipe index on MCU
   int port;   // port on MCU
   unsigned int maxpacket;
   spinlock_t lock;
   int halted;
   u32 todo;
+  u8 dir;
   int id;
 };
 
@@ -355,7 +360,8 @@ void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
-void vusb_spi_pipe_ack(struct vusb_udc* udc, u8 irq);
+void vusb_spi_pipe_ack(struct vusb_udc* udc, struct vusb_ep* ep);
+void vusb_spi_pipe_stall(struct vusb_udc* udc, struct vusb_ep* ep);
 void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
 void vusb_work_handler(struct work_struct* work);
 void vusb_work_irqhandler(struct work_struct* work);

@@ -216,7 +216,7 @@ struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
   int idx;
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &udc->ep[idx];
-    if (ep->pipe == ep_idx) {
+    if (ep->idx == ep_idx) {
       return ep;
     }
   }
@@ -230,8 +230,8 @@ static void vusb_ep_irq_data(struct work_struct* work)
 
   if (ep->ep_usb.caps.type_control) {
     u8 transfer[24];
-    transfer[0] = ep->port; // octopus port
-    transfer[1] = ep->pipe; // octopus pipe
+    transfer[0] = REG_PIPE_SPFIFO; // octopus port
+    transfer[1] = ep->idx; // octopus pipe
     vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + sizeof(struct usb_ctrlrequest));
     struct usb_ctrlrequest setup;
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
@@ -242,11 +242,11 @@ static void vusb_ep_irq_data(struct work_struct* work)
   if (ep->ep_usb.caps.dir_out && !ep->ep_usb.caps.type_control) {
     u8 transfer[64];
     // OUT data from the mcu...
-    transfer[0] = ep->port; // octopus port
-    transfer[1] = ep->pipe; // octopus pipe
+    transfer[0] = REG_PIPE_FIFO; // octopus port
+    transfer[1] = ep->idx; // octopus pipe
     vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->pipe, ep->maxpacket);
+    UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
     pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
     //vusb_do_data(ep->udc, ep);
   }
@@ -276,7 +276,7 @@ static void vusb_ep_data(struct work_struct* work)
   }
   else
   if (ep->ep_usb.caps.dir_in) {
-    dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->pipe);
+    dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
     vusb_do_data(ep->udc, ep);
   }
 
@@ -295,39 +295,39 @@ static void vusb_ep_status(struct work_struct* work)
     spin_unlock_irqrestore(&ep->lock, flags);
 
     UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
-      ep->name, ep->pipe, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
+      ep->name, ep->idx, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
 
     // max packetsize
     transfer[0] = REG_PIPE_MAXPKTS; // reg
-    transfer[1] = ep->pipe; // pipe num
+    transfer[1] = ep->idx; // pipe num
     transfer[2] = ep->ep_usb.desc->wMaxPacketSize;			// field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
     // set the pipe endpoint address
     transfer[0] = REG_PIPE_EPADDRESS; // reg
-    transfer[1] = ep->pipe; // pipe num
+    transfer[1] = ep->idx; // pipe num
     transfer[2] = ep->ep_usb.desc->bEndpointAddress;			// field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
     // set the pipe interval
     transfer[0] = REG_PIPE_INTERVAL; // reg
-    transfer[1] = ep->pipe; // pipe num
+    transfer[1] = ep->idx; // pipe num
     transfer[2] = ep->ep_usb.desc->bInterval;			// field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
     // set the pipe enable
     transfer[0] = REG_PIPE_ENABLED; // reg
-    transfer[1] = ep->pipe; // pipe num
+    transfer[1] = ep->idx; // pipe num
     transfer[2] = 1;			  // field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
   } else
     if (ep->todo & DISABLE) {
       UDCVDBG(ep->udc, "vusb_ep_state disable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
-        ep->name, ep->pipe, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
+        ep->name, ep->idx, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
 
       // set the pipe enable
       transfer[0] = REG_PIPE_ENABLED; // reg
-      transfer[1] = ep->pipe; // pipe num
+      transfer[1] = ep->idx; // pipe num
       transfer[2] = 0;			  // field to set
       vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
@@ -338,10 +338,10 @@ static void vusb_ep_status(struct work_struct* work)
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~STALL_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
-    UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s, pipe:%d\n", ep->name, ep->pipe);
+    UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s, pipe:%d\n", ep->name, ep->idx);
   }
   else {
-    UDCVDBG(ep->udc, "vusb_ep_state '!STALL' request, name: %s, pipe: %d\n", ep->name, ep->pipe);
+    UDCVDBG(ep->udc, "vusb_ep_state '!STALL' request, name: %s, pipe: %d\n", ep->name, ep->idx);
     ep->halted = 0;
   }
 
@@ -370,7 +370,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     INIT_WORK(&ep->wk_status, vusb_ep_status);
     INIT_WORK(&ep->wk_irq_data, vusb_ep_irq_data);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
-    ep->pipe = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
+    ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
 
     if (idx == 0) { /* For EP0 */
  // ep->pipe = portnr - 1;
@@ -380,18 +380,21 @@ void vusb_eps_init(struct vusb_udc* udc)
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d", idx);
+      ep->dir = USB_DIR_BOTH;
       continue;
     }
 
     if (idx == 1) { /* EP1 is OUT */
       ep->ep_usb.caps.dir_in = false;
       ep->ep_usb.caps.dir_out = true;
+      ep->dir = USB_DIR_OUT;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-out", idx);
     }
 
     if (idx > 1) { /* EP2 & EP3 are IN */
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = false;
+      ep->dir = USB_DIR_IN;
       snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-in", idx);
     }
     ep->ep_usb.caps.type_iso = false;

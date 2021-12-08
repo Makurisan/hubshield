@@ -69,6 +69,8 @@ static void vusb_getstatus(struct vusb_udc *udc)
 	status = cpu_to_le16(status);
 	//spi_wr_buf(udc, VUSB_REG_EP0FIFO, &status, 2);
 	//spi_wr8_ack(udc, VUSB_REG_EP0BC, 2, 1);
+  vusb_spi_pipe_ack(udc, ep);
+  UDCVDBG(udc, "Respond to getstatus request\n");
 	return;
 stall:
 	UDCVDBG(udc, "Can't respond to getstatus request\n");
@@ -128,13 +130,13 @@ void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrl
 
 	switch (udc->setup.bRequest) {
 	case USB_REQ_GET_STATUS:
+    UDCVDBG(udc, "Get status, reqtype: %x\n", udc->setup.bRequestType);
 		/* Data+Status phase form udc */
 		if ((udc->setup.bRequestType &
 				(USB_DIR_IN | USB_TYPE_MASK)) !=
 				(USB_DIR_IN | USB_TYPE_STANDARD)) {
 			break;
 		}
-    UDCVDBG(udc, "Get status %x\n", udc->setup.wValue);
     return vusb_getstatus(udc);
 	case USB_REQ_SET_ADDRESS:
 		/* Status phase from udc */
@@ -143,12 +145,12 @@ void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrl
 			break;
 		}
     // ack setaddress
-    vusb_spi_pipe_ack(udc, ep->pipe);
-    UDCVDBG(udc, "Assigned Address=%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
+    vusb_spi_pipe_ack(udc, ep);
+    UDCVDBG(udc, "Assigned Address=%d, epname: %s\n", udc->setup.wValue, ep->name);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", udc->setup.wValue, ep->pipe);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", udc->setup.wValue, ep->idx);
     /* Requests with no data phase, status phase from udc */
 		if ((udc->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -157,15 +159,13 @@ void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrl
 	default:
 		break;
 	}
+
   //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
 	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
-    //UDCVDBG(udc, "setup error: Type: %x Request: %x\n", setup.bRequestType, setup.bRequest);
-    // print the setup packet which leads to the error
-    pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_ERROR, "setup error");
+    UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, setup.bRequestType, setup.bRequest);
+    // prints the setup packet which leads to the error
+		pr_hex_mark_debug((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
   	//	/* Stall EP0 */
-    //UDCVDBG(udc, "Stall EP0 %x\n", udc->gadget);
-    //	//spi_wr8(udc, VUSB_REG_EPSTALLS,
-	  //	//STLEP0IN | STLEP0OUT | STLSTAT);
 	}
 
 }
@@ -175,7 +175,7 @@ void vusb_req_done(struct vusb_req *req, int status)
 	struct vusb_ep *ep = req->ep;
 	struct vusb_udc *udc = ep->udc;
 
-  UDCVDBG(udc, "%s vusb_req_done %p, status %d\n", ep->name, req, status);
+  //UDCVDBG(udc, "%s vusb_req_done %p, status %d\n", ep->name, req, status);
   //UDCVDBG(udc, "---> vusb_req_done: %s\n", &ep->name);
 
 	if (req->usb_req.status == -EINPROGRESS)
@@ -212,20 +212,43 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
+	UDCVDBG(udc, "vusb_do_data, epname: %s, reqtype: %x, request:%x, length:%d\n", ep->name, udc->setup.bRequestType, 
+		udc->setup.bRequest, length);
 
 	done = 0;
-	if (ep->ep_usb.caps.dir_in) {
-		prefetch(buf);
-		//pr_hex_mark(buf, length, PRINTF_READ, req->ep->name);
-		udc->spitransfer[0] = req->ep->port;
-		udc->spitransfer[1] = req->ep->pipe;
-		memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
-		vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
+
+	if (ep->dir == USB_DIR_BOTH) {
+
+	static u8 getdata[] = {
+      0x02, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
+			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00
+		};
+
+		if (udc->setup.bRequest != USB_REQ_GET_STATUS)	{
+      prefetch(buf);
+			udc->spitransfer[0] = REG_PIPE_FIFO;
+			udc->spitransfer[1] = req->ep->idx;
+			memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+			vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
+      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
+
+		}	else {
+      length = min(length, psz);
+			udc->spitransfer[0] = REG_PIPE_FIFO;
+      udc->spitransfer[1] = req->ep->idx;
+			vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+      spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+      //memmove(buf, cmd->data, length); // mcu pipe index
+      memmove(buf, getdata, length); // mcu pipe index
+      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
+			prefetchw(buf);
+		}
 		if (length < psz) {
 			done = 1;
 		}
-	}else
-	if (ep->ep_usb.caps.dir_out) {
+
+	} 
+  if (ep->dir == USB_DIR_OUT) {
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		//psz = 1;
 		length = min(length, psz);
@@ -235,6 +258,14 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
 	}
+	if (ep->dir == USB_DIR_IN) {
+    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - EP-IN");
+    prefetch(buf);
+    udc->spitransfer[0] = REG_PIPE_FIFO;
+    udc->spitransfer[1] = req->ep->idx;
+    memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+  }
 
 	req->usb_req.actual += length;
 
@@ -254,7 +285,7 @@ xfer_done:
 
 		// todo must be changed to 
 		if (ep->ep_usb.caps.dir_in)
-			vusb_spi_pipe_ack(udc, ep->pipe);
+			vusb_spi_pipe_ack(udc, ep);
 		vusb_req_done(req, 0);
 		return false;
 	}
@@ -372,16 +403,16 @@ static void vusb_port_start(struct work_struct* work)
 	// control pipe
 	
 	transfer[0] = REG_PIPE_PORT; // reg
-  transfer[1] = ep->pipe; // pipe num
+  transfer[1] = ep->idx; // pipe num
   transfer[2] = ep->port; // port
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
   // set enable on control pipe
   transfer[0] = REG_PIPE_ENABLED; // reg
-  transfer[1] = ep->pipe; // pipe num
+  transfer[1] = ep->idx; // pipe num
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-  dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+  dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // remote or local port
   transfer[0] = PORT_REG_DEVTYPE; // reg
@@ -433,7 +464,9 @@ static void vusb_dev_nuke(struct vusb_udc* udc, int status)
   unsigned int i;
 
   for (i = 0; i < VUSB_MAX_EPS; i++) {
-		vusb_nuke(&udc->ep[i], status);
+		if (udc->ep[i].ep_usb.caps.dir_in)	{
+      vusb_nuke(&udc->ep[i], status);
+		}
   }
 }
 
@@ -485,21 +518,21 @@ static void vusb_configure_pipe(struct work_struct* work)
 
   // set port on control pipe
   transfer[0] = REG_PIPE_PORT; // reg
-  transfer[1] = ep->pipe; // pipe num
+  transfer[1] = ep->idx; // pipe num
   transfer[2] = ep->port; // port
 	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->pipe, ep->name);
+	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg
-  transfer[1] = ep->pipe; // pipe num
+  transfer[1] = ep->idx; // pipe num
   transfer[2] = REG_EP_INTERRUPT; // field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
   // set the pipe type
   transfer[0] = REG_PIPE_MAXPKTS; // reg
-  transfer[1] = ep->pipe; // pipe num
+  transfer[1] = ep->idx; // pipe num
   transfer[2] = 0x40;			// field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
@@ -513,7 +546,7 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
   struct usb_ep* _ep;
 	struct vusb_ep* ep;
 
-  dev_info(&udc->spi->dev, "Hub vusb_match_ep \n");
+  //dev_info(&udc->spi->dev, "Hub vusb_match_ep \n");
 
   /* Look at endpoints until an unclaimed one looks usable */
   list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
