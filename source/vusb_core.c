@@ -238,8 +238,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       udc->spitransfer[1] = req->ep->idx;
 			vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, length + 2 * sizeof(u8));
       spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
-      //memmove(buf, cmd->data, length); // mcu pipe index
-      memmove(buf, getdata, length); // mcu pipe index
+      memmove(buf, cmd->data, length); // mcu pipe index
+      //memmove(buf, getdata, length); // mcu pipe index
       pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
 			prefetchw(buf);
 		}

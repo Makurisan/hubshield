@@ -228,21 +228,21 @@ static void vusb_ep_irq_data(struct work_struct* work)
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_irq_data);
   struct vusb_udc* udc = ep->udc;
 
-  if (ep->ep_usb.caps.type_control) {
+  if (ep->dir == USB_DIR_BOTH) {
     u8 transfer[24];
-    transfer[0] = REG_PIPE_SPFIFO; // octopus port
+    transfer[0] = REG_PIPE_SPFIFO; // setup register
     transfer[1] = ep->idx; // octopus pipe
-    vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + sizeof(struct usb_ctrlrequest));
+    vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, sizeof(struct usb_ctrlrequest));
     struct usb_ctrlrequest setup;
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    memmove(&setup, &cmd->data[sizeof(u8)], sizeof(struct usb_ctrlrequest));
+    memmove(&setup, cmd->data, sizeof(struct usb_ctrlrequest));
     // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
     vusb_handle_setup(ep->udc, ep, setup);
   } else
-  if (ep->ep_usb.caps.dir_out && !ep->ep_usb.caps.type_control) {
+  if (ep->dir == USB_DIR_OUT) {
     u8 transfer[64];
     // OUT data from the mcu...
-    transfer[0] = REG_PIPE_FIFO; // octopus port
+    transfer[0] = REG_PIPE_FIFO; // write&read register
     transfer[1] = ep->idx; // octopus pipe
     vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
@@ -257,12 +257,11 @@ static void vusb_ep_data(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_data);
 
-  if (ep->ep_usb.caps.type_control) {
+  if (ep->dir == USB_DIR_BOTH) {
     // process the data from the list
     while (vusb_do_data(ep->udc, ep));
   }
-  else
-  if (ep->ep_usb.caps.dir_out) {
+  if (ep->dir == USB_DIR_OUT) {
     //vusb_do_data(ep->udc, ep);
     struct vusb_req* req;
     void* buf;
@@ -274,8 +273,7 @@ static void vusb_ep_data(struct work_struct* work)
       req->usb_req.length, req->usb_req.actual, req);
 
   }
-  else
-  if (ep->ep_usb.caps.dir_in) {
+  if (ep->dir == USB_DIR_IN) {
     dev_info(ep->udc->dev, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
     vusb_do_data(ep->udc, ep);
   }
