@@ -35,32 +35,25 @@ static const char driver_name[] = "vusb-udc";
 static int vusb_remove(struct spi_device* spi);
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx);
 
-static void vusb_getstatus(struct vusb_udc *udc)
+static void vusb_getstatus(struct vusb_ep* ep)
 {
-	struct vusb_ep *ep;
 	u16 status = 0;
+	struct vusb_udc* udc = ep->udc;
+	struct vusb_ep* _ep;
 
-	switch (udc->setup.bRequestType & USB_RECIP_MASK) {
+	switch (ep->setup.bRequestType & USB_RECIP_MASK) {
 	case USB_RECIP_DEVICE:
 		/* Get device status */
 		status = udc->gadget.is_selfpowered << USB_DEVICE_SELF_POWERED;
 		status |= (udc->remote_wkp << USB_DEVICE_REMOTE_WAKEUP);
 		break;
 	case USB_RECIP_INTERFACE:
-		if (udc->driver->setup(&udc->gadget, &udc->setup) < 0)
+		if (udc->driver->setup(&udc->gadget, &ep->setup) < 0)
 			goto stall;
 		break;
 	case USB_RECIP_ENDPOINT:
-		ep = &udc->ep[udc->setup.wIndex & USB_ENDPOINT_NUMBER_MASK];
-		if (udc->setup.wIndex & USB_DIR_IN) {
-			if (!ep->ep_usb.caps.dir_in)
-				goto stall;
-		} else {
-			if (!ep->ep_usb.caps.dir_out)
-				goto stall;
-		}
-		if (ep->halted)
-			status = 1 << USB_ENDPOINT_HALT;
+		//_ep = &udc->ep[ep->setup.wIndex & USB_ENDPOINT_NUMBER_MASK];
+    UDCVDBG(udc, "******** vusb_getstatus - not implemented yet...\n");
 		break;
 	default:
 		goto stall;
@@ -77,42 +70,42 @@ stall:
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-static void vusb_set_clear_feature(struct vusb_udc *udc)
+static void vusb_set_clear_feature(struct vusb_ep* ep)
 {
-	struct vusb_ep *ep;
-	int set = udc->setup.bRequest == USB_REQ_SET_FEATURE;
+	struct vusb_udc* udc = ep->udc;
+	struct vusb_ep *_ep;
+	int set = ep->setup.bRequest == USB_REQ_SET_FEATURE;
 	unsigned long flags;
 	int id;
 
-	switch (udc->setup.bRequestType) {
+	switch (ep->setup.bRequestType) {
 	case USB_RECIP_DEVICE:
-		if (udc->setup.wValue != USB_DEVICE_REMOTE_WAKEUP)
+		if (ep->setup.wValue != USB_DEVICE_REMOTE_WAKEUP)
 			break;
 
-		if (udc->setup.bRequest == USB_REQ_SET_FEATURE)
+		if (ep->setup.bRequest == USB_REQ_SET_FEATURE)
 			udc->remote_wkp = 1;
 		else
 			udc->remote_wkp = 0;
-
 		//return spi_ack_ctrl(udc);
     return;
 
 	case USB_RECIP_ENDPOINT:
-		if (udc->setup.wValue != USB_ENDPOINT_HALT)
+		if (ep->setup.wValue != USB_ENDPOINT_HALT)
 			break;
 
-		id = udc->setup.wIndex & USB_ENDPOINT_NUMBER_MASK;
-		ep = &udc->ep[id];
+		id = ep->setup.wIndex & USB_ENDPOINT_NUMBER_MASK;
+		_ep = &udc->ep[id];
 
-		spin_lock_irqsave(&ep->lock, flags);
-		ep->todo &= ~STALL_EP;
+		spin_lock_irqsave(&_ep->lock, flags);
+		_ep->todo &= ~STALL_EP;
 		if (set)
-			ep->todo |= STALL;
+			_ep->todo |= STALL;
 		else
-			ep->todo |= UNSTALL;
-		spin_unlock_irqrestore(&ep->lock, flags);
+			_ep->todo |= UNSTALL;
+		spin_unlock_irqrestore(&_ep->lock, flags);
 		UDCVDBG(udc, "vusb_set_clear_feature: stall\n");
-		schedule_work(&ep->wk_status);
+		schedule_work(&_ep->wk_status);
 		return;
 	default:
 		break;
@@ -121,50 +114,52 @@ static void vusb_set_clear_feature(struct vusb_udc *udc)
 	//spi_wr8(udc, VUSB_REG_EPSTALLS, STLEP0IN | STLEP0OUT | STLSTAT);
 }
 
-void vusb_handle_setup(struct vusb_udc *udc, struct vusb_ep* ep, struct usb_ctrlrequest setup)
+void vusb_handle_setup(struct vusb_ep* ep)
 {
-	udc->setup = setup;
-	udc->setup.wValue = cpu_to_le16(setup.wValue);
-	udc->setup.wIndex = cpu_to_le16(setup.wIndex);
-	udc->setup.wLength = cpu_to_le16(setup.wLength);
+	struct vusb_udc* udc = ep->udc;
 
-	switch (udc->setup.bRequest) {
+	//ep->setup = setup;
+	//ep->setup.wValue = cpu_to_le16(setup.wValue);
+	//ep->setup.wIndex = cpu_to_le16(setup.wIndex);
+	//ep->setup.wLength = cpu_to_le16(setup.wLength);
+
+	switch (ep->setup.bRequest) {
 	case USB_REQ_GET_STATUS:
-    UDCVDBG(udc, "Get status, reqtype: %x\n", udc->setup.bRequestType);
+    UDCVDBG(udc, "Get status, reqtype: %x\n", ep->setup.bRequestType);
 		/* Data+Status phase form udc */
-		if ((udc->setup.bRequestType &
+		if ((ep->setup.bRequestType &
 				(USB_DIR_IN | USB_TYPE_MASK)) !=
 				(USB_DIR_IN | USB_TYPE_STANDARD)) {
 			break;
 		}
-    return vusb_getstatus(udc);
+    return vusb_getstatus(ep);
 	case USB_REQ_SET_ADDRESS:
 		/* Status phase from udc */
-		if (udc->setup.bRequestType != (USB_DIR_OUT |
+		if (ep->setup.bRequestType != (USB_DIR_OUT |
 				USB_TYPE_STANDARD | USB_RECIP_DEVICE)) {
 			break;
 		}
     // ack setaddress
     vusb_spi_pipe_ack(udc, ep);
-    UDCVDBG(udc, "Assigned Address=%d, epname: %s\n", udc->setup.wValue, ep->name);
+    UDCVDBG(udc, "Assigned Address=%d, epname: %s\n", ep->setup.wValue, ep->name);
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", udc->setup.wValue, ep->idx);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", ep->setup.wValue, ep->idx);
     /* Requests with no data phase, status phase from udc */
-		if ((udc->setup.bRequestType & USB_TYPE_MASK)
+		if ((ep->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
 			break;
-		return vusb_set_clear_feature(udc);
+		return vusb_set_clear_feature(ep);
 	default:
 		break;
 	}
 
   //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
-	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &setup) < 0) {
-    UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, setup.bRequestType, setup.bRequest);
+	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &ep->setup) < 0) {
+    UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, ep->setup.bRequestType, ep->setup.bRequest);
     // prints the setup packet which leads to the error
-		pr_hex_mark_debug((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
+		pr_hex_mark_debug((void*)&ep->setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
   	//	/* Stall EP0 */
 	}
 
@@ -212,14 +207,14 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-	UDCVDBG(udc, "vusb_do_data, epname: %s, reqtype: %x, request:%x, length:%d\n", ep->name, udc->setup.bRequestType, 
-		udc->setup.bRequest, length);
+	UDCVDBG(udc, "vusb_do_data, epname: %s, reqtype: %x, request:%x, length:%d\n", ep->name, ep->setup.bRequestType, 
+		ep->setup.bRequest, length);
 
 	done = 0;
 
 	if (ep->dir == USB_DIR_BOTH) {
 		// OUT setup packet
-		if ( ep->ep0_dir == USB_DIR_OUT && udc->setup.wLength)	{
+		if ( ep->ep0_dir == USB_DIR_OUT && ep->setup.wLength)	{
       length = min(length, psz);
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;

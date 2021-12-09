@@ -229,18 +229,20 @@ static void vusb_ep_irq_data(struct work_struct* work)
   struct vusb_udc* udc = ep->udc;
 
   if (ep->dir == USB_DIR_BOTH) {
+    
     u8 transfer[24];
     transfer[0] = REG_PIPE_SPFIFO; // setup register
     transfer[1] = ep->idx; // octopus pipe
     vusb_read_buffer(ep->udc, VUSB_REG_PIPE_GET_DATA, transfer, sizeof(struct usb_ctrlrequest));
-    struct usb_ctrlrequest setup;
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    memmove(&setup, cmd->data, sizeof(struct usb_ctrlrequest));
+    memmove(&ep->setup, cmd->data, sizeof(struct usb_ctrlrequest));
     // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
-    ep->ep0_dir = setup.bRequestType & USB_DIR_IN? USB_DIR_IN:USB_DIR_OUT;
-    vusb_handle_setup(ep->udc, ep, setup);
+    ep->ep0_dir = ep->setup.bRequestType & USB_DIR_IN? USB_DIR_IN:USB_DIR_OUT;
+    vusb_handle_setup(ep);
+  
   } else
   if (ep->dir == USB_DIR_OUT) {
+   
     u8 transfer[64];
     // OUT data from the mcu...
     transfer[0] = REG_PIPE_FIFO; // write&read register
@@ -250,6 +252,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
     UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
     pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
     //vusb_do_data(ep->udc, ep);
+  
   }
 
 }

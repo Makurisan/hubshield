@@ -259,7 +259,7 @@ struct vusb_pipe {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
-  struct usb_ctrlrequest setup;
+  struct usb_ctrlrequest setup;   // only relevant for ctrl pipes
   struct work_struct wk_udc_work; // port ep0 udc work start/stop
   struct work_struct wk_data;     // ep data handling
   struct work_struct wk_status;   // ep status handling
@@ -332,8 +332,6 @@ struct vusb_udc {
 
   struct usb_gadget gadget;
   struct vusb_ep ep[VUSB_MAX_EPS];
- 
-  struct usb_ctrlrequest setup;
 
   struct usb_gadget_driver* driver;
 
@@ -364,7 +362,7 @@ irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);
 int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 void vusb_spi_pipe_ack(struct vusb_udc* udc, struct vusb_ep* ep);
 void vusb_spi_pipe_stall(struct vusb_udc* udc, struct vusb_ep* ep);
-void vusb_handle_setup(struct vusb_udc* udc, struct vusb_ep* ep, struct usb_ctrlrequest setup);
+void vusb_handle_setup(struct vusb_ep* ep);
 void vusb_work_handler(struct work_struct* work);
 void vusb_work_irqhandler(struct work_struct* work);
 int vusb_do_data(struct vusb_udc* udc, struct vusb_ep* ep);
