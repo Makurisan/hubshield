@@ -228,7 +228,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
       memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
-      vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+      vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
       pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
 		}
 		if (length < psz) {
@@ -252,7 +252,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx;
     memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
-    vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+    vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
   }
 
 	req->usb_req.actual += length;
