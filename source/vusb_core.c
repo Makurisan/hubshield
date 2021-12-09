@@ -218,30 +218,23 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	done = 0;
 
 	if (ep->dir == USB_DIR_BOTH) {
-
-	static u8 getdata[] = {
-      0x02, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00,
-			0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00
-		};
-
-		if (udc->setup.bRequest != USB_REQ_GET_STATUS)	{
-      prefetch(buf);
-			udc->spitransfer[0] = REG_PIPE_FIFO;
-			udc->spitransfer[1] = req->ep->idx;
-			memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
-			vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length+2*sizeof(u8));
-      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
-
-		}	else {
+		// OUT setup packet
+		if ( ep->ep0_dir == USB_DIR_OUT && udc->setup.wLength)	{
       length = min(length, psz);
-			udc->spitransfer[0] = REG_PIPE_FIFO;
+      udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
-			vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+      vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, length + 2 * sizeof(u8));
       spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
       memmove(buf, cmd->data, length); // mcu pipe index
-      //memmove(buf, getdata, length); // mcu pipe index
       pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
-			prefetchw(buf);
+      prefetchw(buf);
+		}	else {
+      prefetch(buf);
+      udc->spitransfer[0] = REG_PIPE_FIFO;
+      udc->spitransfer[1] = req->ep->idx;
+      memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+      vusb_write_buffer(udc, VUSB_REG_PIPE_WRITE_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
 		}
 		if (length < psz) {
 			done = 1;

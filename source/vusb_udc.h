@@ -259,6 +259,7 @@ struct vusb_pipe {
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
+  struct usb_ctrlrequest setup;
   struct work_struct wk_udc_work; // port ep0 udc work start/stop
   struct work_struct wk_data;     // ep data handling
   struct work_struct wk_status;   // ep status handling
@@ -272,6 +273,7 @@ struct vusb_ep {
   int halted;
   u32 todo;
   u8 dir;
+  u8 ep0_dir; // ctrl ep direction IN/OUT
   int id;
 };
 

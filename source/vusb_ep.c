@@ -237,6 +237,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
     memmove(&setup, cmd->data, sizeof(struct usb_ctrlrequest));
     // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
+    ep->ep0_dir = setup.bRequestType & USB_DIR_IN? USB_DIR_IN:USB_DIR_OUT;
     vusb_handle_setup(ep->udc, ep, setup);
   } else
   if (ep->dir == USB_DIR_OUT) {
@@ -369,6 +370,7 @@ void vusb_eps_init(struct vusb_udc* udc)
     INIT_WORK(&ep->wk_irq_data, vusb_ep_irq_data);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
     ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
+    ep->ep0_dir = 0; // set while reading setup packet
 
     if (idx == 0) { /* For EP0 */
  // ep->pipe = portnr - 1;
