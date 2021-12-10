@@ -207,7 +207,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-	UDCVDBG(udc, "vusb_do_data, epname: %s, reqtype: %x, request:%x, length:%d\n", ep->name, ep->setup.bRequestType, 
+	UDCVDBG(udc, "vusb_do_data, epname: %s, ep/idx: %d, reqtype: %x, request:%x, length:%d\n", ep->name, ep->idx, ep->setup.bRequestType, 
 		ep->setup.bRequest, length);
 
 	done = 0;
@@ -218,7 +218,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       length = min(length, psz);
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
-      vusb_read_buffer(udc, VUSB_REG_PIPE_GET_DATA, udc->spitransfer, length + 2 * sizeof(u8));
+      vusb_read_buffer(udc, VUSB_REG_MAP_PIPE_GET, udc->spitransfer, length + 2 * sizeof(u8));
       spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
       memmove(buf, cmd->data, length); // mcu pipe index
       pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
@@ -239,7 +239,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
   if (ep->dir == USB_DIR_OUT) {
 		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
 		//psz = 1;
-		length = min(length, psz);
+    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+    length = min(length, psz);
     prefetchw(buf);
 		//memmove(buf, "ls\x0d", length);
 		//spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
@@ -247,12 +248,16 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 			done = 1;
 	}
 	if (ep->dir == USB_DIR_IN) {
-    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - EP-IN");
+    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
     prefetch(buf);
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx;
     memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
+    if (length < psz) {
+      done = 1;
+    }
+
   }
 
 	req->usb_req.actual += length;
@@ -381,6 +386,7 @@ static int vusb_wakeup(struct usb_gadget *gadget)
 #define VUSB_TYPE_INT		1
 #define DEBUG
 
+// the function is called with the control pipe of the gadget
 static void vusb_port_start(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
@@ -389,7 +395,8 @@ static void vusb_port_start(struct work_struct* work)
   u8 transfer[24];
 
 	// control pipe
-	
+
+	// register the control ep on the port in the hub
 	transfer[0] = REG_PIPE_PORT; // reg
   transfer[1] = ep->idx; // pipe num
   transfer[2] = ep->port; // port
@@ -515,7 +522,7 @@ static void vusb_configure_pipe(struct work_struct* work)
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg
   transfer[1] = ep->idx; // pipe num
-  transfer[2] = REG_EP_INTERRUPT; // field to set
+  transfer[2] = ep->ep_usb.caps.type_control?REG_EP_CONTROL:REG_EP_INTERRUPT; // field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
   // set the pipe type

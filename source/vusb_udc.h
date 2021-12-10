@@ -72,17 +72,11 @@ enum vusb_req_code {
 #define VUSB_REG_IRQ_SET    0x11
 #define VUSB_REG_IRQ_CLEAR  0x12
 
-// pipe register
-#define VUSB_REG_PIPE_GET_DATA    0x15
-#define VUSB_REG_PIPE_WRITE_DATA  0x17
-#define VUSB_REG_PIPE_MAXPKTSIZE  0x19
-#define VUSB_REG_PORT_ENABLE      0x1a
-
-// port register							 
+// port register port					 
 #define VUSB_REG_MAP_PORT_SET		  0x1b
 #define VUSB_REG_MAP_PORT_GET		  0x1c
 
-// register map port
+// register map pipe
 #define VUSB_REG_MAP_PIPE_SET		  0x1d
 #define VUSB_REG_MAP_PIPE_GET		  0x1e
 
@@ -181,7 +175,7 @@ enum vusb_req_code {
 #define REG_TDS   	18 // count of tds
 
 
-#define VUSB_MAX_EPS		4
+#define VUSB_MAX_EPS		8
 #define VUSB_EP_MAX_PACKET_LIMIT	64 /* Same for all Endpoints */
 #define VUSB_EPNAME_SIZE		16  /* Buffer size for endpoint name */
 
