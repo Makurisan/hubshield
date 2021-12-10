@@ -237,16 +237,25 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	} 
   if (ep->dir == USB_DIR_OUT) {
-		//psz = spi_rd8(udc, VUSB_REG_EP0BC + ep_id);
-		//psz = 1;
-    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+
+    //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
     length = min(length, psz);
-    prefetchw(buf);
-		//memmove(buf, "ls\x0d", length);
-		//spi_rd_buf(udc, VUSB_REG_EP0FIFO + ep_id, buf, length);
+
+    u8 transfer[68];
+    // OUT data from the mcu...
+    transfer[0] = REG_PIPE_FIFO; // write&read register
+    transfer[1] = ep->idx; // pipe
+    vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
+    spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+    UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
+		prefetchw(buf);
+		length = cmd->length - 2; // 2 = crc16
+		memmove(buf, cmd->data, cmd->length);
+    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
 	}
+
 	if (ep->dir == USB_DIR_IN) {
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
     prefetch(buf);
