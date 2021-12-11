@@ -66,7 +66,8 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  UDCVDBG(ep->udc, "vusb_ep_enable name:%s, ep/idx: %d, addr: %x, maxp:%x\n", ep->name, ep->idx, desc->bEndpointAddress, maxp);
+  UDCVDBG(ep->udc, "vusb_ep_enable name:%s, ep/idx: %d, addr: %x, maxp:%x, bmattrib: %d\n", ep->name, ep->idx, 
+        desc->bEndpointAddress, maxp, desc->bmAttributes);
 
   // schedule to work
   schedule_work(&ep->wk_status);
@@ -249,22 +250,21 @@ static void vusb_ep_irq_data(struct work_struct* work)
 static void vusb_ep_data(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_data);
+  unsigned long flags;
 
   if (ep->dir == USB_DIR_BOTH) {
-    // process the data from the list
+    // process all the control data from the list
     while (vusb_do_data(ep->udc, ep));
   }
   if (ep->dir == USB_DIR_OUT) {
-    //vusb_do_data(ep->udc, ep);
+    // the ack of the OUT packet
     struct vusb_req* req;
     void* buf;
     req = list_first_entry(&ep->queue, struct vusb_req, queue);
     buf = req->usb_req.buf + req->usb_req.actual;
     int length = req->usb_req.length - req->usb_req.actual;
-    //pr_hex_mark_debug(buf, length, PRINTF_READ, ep->name, "ep_data");
-    UDCVDBG(ep->udc, "vusb_ep_data out, length: %d, actual: %d, req:%x\n",
-      req->usb_req.length, req->usb_req.actual, req);
-
+    UDCVDBG(ep->udc, "** vusb_ep_data - clear out, name: %s, length: %d, actual: %d\n",
+        ep->name, req->usb_req.length, req->usb_req.actual);
   }
   if (ep->dir == USB_DIR_IN) {
     //UDCVDBG(ep->udc, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
@@ -291,7 +291,7 @@ static void vusb_ep_status(struct work_struct* work)
     // ep type
     transfer[0] = REG_PIPE_TYPE; // reg
     transfer[1] = ep->idx; // pipe num
-    transfer[2] = REG_EP_INTERRUPT;			// field to set
+    transfer[2] = ep->ep_usb.desc->bmAttributes;			// field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
     // max packetsize

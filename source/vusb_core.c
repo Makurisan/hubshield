@@ -207,7 +207,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-	UDCVDBG(udc, "vusb_do_data, epname: %s, ep/idx: %d, reqtype: %x, request:%x, length:%d\n", ep->name, ep->idx, ep->setup.bRequestType, 
+	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, reqtype: %x, request:%x, length:%d\n", ep->name, ep->idx, ep->setup.bRequestType, 
 		ep->setup.bRequest, length);
 
 	done = 0;
@@ -247,7 +247,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     transfer[1] = ep->idx; // pipe
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
+    //UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
 		prefetchw(buf);
 		length = cmd->length - 2; // 2 = crc16
 		memmove(buf, cmd->data, cmd->length);
@@ -416,7 +416,7 @@ static void vusb_port_start(struct work_struct* work)
   transfer[1] = ep->idx; // pipe num
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-  dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
+	UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // remote or local port
   transfer[0] = PORT_REG_DEVTYPE; // reg
@@ -429,9 +429,9 @@ static void vusb_port_start(struct work_struct* work)
   transfer[1] = ep->port; // port
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-  //dev_info(&udc->spi->dev, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
+  //UDCVDBG(udc, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
 
-	dev_info(&udc->spi->dev, "Hub port %d is now in remote stage and enabled", ep->port);
+	UDCVDBG(udc, "Hub port %d is now in remote stage and enabled", ep->port);
 
 }
 
@@ -456,7 +456,7 @@ static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *d
   INIT_WORK(&ep->wk_udc_work, vusb_port_start);
 	schedule_work(&ep->wk_udc_work);
 
-	//dev_info(&udc->spi->dev, "Hub gadget vusb_udc_start\n");
+	//UDCVDBG(udc, "Hub gadget vusb_udc_start\n");
 
 	return 0;
 }
@@ -478,12 +478,12 @@ static void vusb_port_stop(struct work_struct* work)
 {
 	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
 	struct vusb_udc* udc = ep->udc;
-  //dev_info(&udc->spi->dev, "Port %d will be detached", ep->port);
+  //UDCVDBG(udc, "Port %d will be detached", ep->port);
 
   u8 transfer[24];
 	// set disable on port
   transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep->port; // port
+  transfer[1] = 2; // port:ep->port
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
@@ -504,10 +504,20 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
   
+#define DEBUG
+#ifdef DEBUG
   INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
   schedule_work(&ep->wk_udc_work);
+#else
+	u8 transfer[24];
+  // set disable on port
+  transfer[0] = PORT_REG_ENABLED; // reg
+  transfer[1] = ep->port; // port
+  transfer[2] = 0;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+#endif // _DEBUG
 
-  dev_info(&udc->spi->dev, "Hub device on port: %d is removed.\n", ep->port);
+	UDCVDBG(udc, "Hub device on port: %d is removed.\n", ep->port);
 	return 0;
 }
 
@@ -526,7 +536,7 @@ static void vusb_configure_pipe(struct work_struct* work)
   transfer[2] = ep->port; // port
 	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-	dev_info(&udc->spi->dev, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
+	UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg
@@ -550,7 +560,7 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
   struct usb_ep* _ep;
 	struct vusb_ep* ep;
 
-  //dev_info(&udc->spi->dev, "Hub vusb_match_ep \n");
+  //UDCVDBG(udc, "Hub vusb_match_ep \n");
 
   /* Look at endpoints until an unclaimed one looks usable */
   list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
@@ -567,7 +577,7 @@ found_ep:
   INIT_WORK(&ep->wk_udc_work, vusb_configure_pipe);
   schedule_work(&ep->wk_udc_work);
 
-  //dev_info(&udc->spi->dev, "Hub vusb_match_ep ep0:%s\n", ep->name);
+  //UDCVDBG(udc, "Hub vusb_match_ep ep0:%s\n", ep->name);
 
 	return _ep;
 
@@ -611,9 +621,9 @@ static int vusb_probe(struct spi_device *spi)
     dev_err(&spi->dev, "Unable to allocate hub downstreams ports.\n");
     return -ENOMEM;
   }
-  dev_info(&spi->dev, "Hub device has initiated %d hub ports.\n", udc->max_ports);
+	dev_info(&spi->dev, "Hub device has initiated %d hub ports.\n", udc->max_ports);
 
-  dev_info(&udc->spi->dev, "Spi clock set at %u KHz.\n",
+	dev_info(&spi->dev, "Spi clock set at %u KHz.\n",
                  (udc->spi->max_speed_hz + 500) / 1000);
 
 	/* Setup gadget structure */
@@ -653,7 +663,7 @@ static int vusb_probe(struct spi_device *spi)
 
   /* Init crc8 */
   crc8_populate_msb(udc->crc_table, 0x7);
-
+// udc gagdet dev ?????
 	udc->dev = &udc->gadget.dev;
 
 	spi_set_drvdata(spi, udc);
