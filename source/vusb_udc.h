@@ -96,6 +96,9 @@ enum vusb_req_code {
 #define REG_PIPE_INTERVAL  9
 #define REG_PIPE_EPADDRESS 10
 
+// debug
+#define REG_PIPE_NAME			 15
+
 // register map PORT on the mcu
 
 #define REG_MAP_PORT 2	

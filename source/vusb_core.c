@@ -416,7 +416,7 @@ static void vusb_port_start(struct work_struct* work)
   transfer[1] = ep->idx; // pipe num
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-	UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
+	//UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // remote or local port
   transfer[0] = PORT_REG_DEVTYPE; // reg
@@ -431,7 +431,7 @@ static void vusb_port_start(struct work_struct* work)
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
   //UDCVDBG(udc, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
 
-	UDCVDBG(udc, "Hub port %d is now in remote stage and enabled", ep->port);
+	UDCVDBG(udc, "Hub port %d with ctrl/pipe: %s is now in remote stage and enabled", ep->port, ep->name);
 
 }
 
@@ -483,11 +483,10 @@ static void vusb_port_stop(struct work_struct* work)
   u8 transfer[24];
 	// set disable on port
   transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = 2; // port:ep->port
+  transfer[1] = ep->port; // port: 2
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 
-	//vusb_dev_nuke(udc, -ESHUTDOWN);
 }
 
 static int vusb_udc_stop(struct usb_gadget *gadget)
@@ -503,7 +502,9 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 	udc->softconnect = false;
 	udc->todo |= UDC_START;
 	spin_unlock_irqrestore(&udc->lock, flags);
-  
+
+  //vusb_dev_nuke(udc, -ESHUTDOWN);
+
 #define DEBUG
 #ifdef DEBUG
   INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
@@ -536,7 +537,7 @@ static void vusb_configure_pipe(struct work_struct* work)
   transfer[2] = ep->port; // port
 	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-	UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
+	UDCVDBG(udc, "- port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
 
   // set the pipe type
   transfer[0] = REG_PIPE_TYPE; // reg

@@ -258,13 +258,8 @@ static void vusb_ep_data(struct work_struct* work)
   }
   if (ep->dir == USB_DIR_OUT) {
     // the ack of the OUT packet
-    struct vusb_req* req;
-    void* buf;
-    req = list_first_entry(&ep->queue, struct vusb_req, queue);
-    buf = req->usb_req.buf + req->usb_req.actual;
-    int length = req->usb_req.length - req->usb_req.actual;
-    UDCVDBG(ep->udc, "** vusb_ep_data - clear out, name: %s, length: %d, actual: %d\n",
-        ep->name, req->usb_req.length, req->usb_req.actual);
+    vusb_spi_pipe_ack(ep->udc, ep);
+    UDCVDBG(ep->udc, "vusb_ep_data - clear out, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
   }
   if (ep->dir == USB_DIR_IN) {
     //UDCVDBG(ep->udc, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
@@ -287,6 +282,12 @@ static void vusb_ep_status(struct work_struct* work)
 
     //UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
     //  ep->name, ep->idx, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
+
+    // ep name
+    transfer[0] = REG_PIPE_NAME; // reg
+    transfer[1] = ep->idx; // pipe num
+    memcpy(&transfer[2], ep->name, sizeof(ep->name));			// field to set
+    vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8)*2+sizeof(ep->name));
 
     // ep type
     transfer[0] = REG_PIPE_TYPE; // reg
