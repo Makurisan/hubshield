@@ -249,8 +249,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
     //UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
 		prefetchw(buf);
-		length = cmd->length - 2; // 2 = crc16
-		memmove(buf, cmd->data, cmd->length);
+		length = (cmd->length - sizeof(u16)) - sizeof(u32); // 2 = crc16, length field u32 at the beginning
+		memmove(buf, &cmd->data[4], length);
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
@@ -563,6 +563,7 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
 
   //UDCVDBG(udc, "Hub vusb_match_ep \n");
 
+
   /* Look at endpoints until an unclaimed one looks usable */
   list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
     if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
@@ -739,7 +740,8 @@ static int vusb_probe(struct spi_device *spi)
 	
 	INIT_WORK(&udc->vusb_irq_wq, vusb_irq_mcu_handler);
 
-  //udc->qwork = create_singlethread_workqueue("octohub");
+
+  udc->irq_work = create_singlethread_workqueue("spihubirq");
 
 	// gadget must be the last activated in the probe
 	rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
@@ -779,14 +781,19 @@ static int vusb_remove(struct spi_device *spi)
   dev_t dev_id = MKDEV(udc->crdev_major, 0);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
 
-	//if (udc->qwork) {
-	//	flush_workqueue(udc->qwork);
-	//	destroy_workqueue(udc->qwork);
-	//}
+	if (udc->irq_work) {
+		flush_workqueue(udc->irq_work);
+		destroy_workqueue(udc->irq_work);
+	}
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");
 
 	return 0;
+}
+
+static void vusb_shutdown(struct spi_device* spi)
+{
+  dev_info(&spi->dev, "*** vusb_shutdown\n");
 }
 
 static const struct of_device_id vusb_udc_of_match[] = {
@@ -798,10 +805,12 @@ MODULE_DEVICE_TABLE(of, vusb_udc_of_match);
 static struct spi_driver vusb_driver = {
 	.probe = vusb_probe,
 	.remove = vusb_remove,
+  .shutdown = vusb_shutdown,
 	.driver = {
 		.name = KBUILD_MODNAME,
 		.of_match_table = of_match_ptr(vusb_udc_of_match),
 	},
+
 };
 
 module_spi_driver(vusb_driver);

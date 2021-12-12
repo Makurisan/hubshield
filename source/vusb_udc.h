@@ -307,6 +307,8 @@ struct vusb_udc {
   struct mutex spi_read_mutex;
   struct mutex spi_write_mutex;
 
+  struct workqueue_struct* irq_work;
+
   struct work_struct	vusb_irq_wq;
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;
