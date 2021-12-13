@@ -372,10 +372,10 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   {
     unsigned long flags;
     struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip)
+    if (chip && udc->softconnect)
     {
       spin_lock_irqsave(&udc->wq_lock, flags);
-			schedule_work(&udc->vusb_irq_wq);
+			queue_work(udc->irq_work, &udc->vusb_irq_wq);
 			spin_unlock_irqrestore(&udc->wq_lock, flags);
     }
   }
@@ -505,6 +505,8 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
 
   //vusb_dev_nuke(udc, -ESHUTDOWN);
 
+  flush_workqueue(udc->irq_work);
+
 #define DEBUG
 #ifdef DEBUG
   INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
@@ -517,6 +519,7 @@ static int vusb_udc_stop(struct usb_gadget *gadget)
   transfer[2] = 0;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
 #endif // _DEBUG
+
 
 	UDCVDBG(udc, "Hub device on port: %d is removed.\n", ep->port);
 	return 0;
