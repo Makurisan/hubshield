@@ -249,8 +249,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
     //UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
 		prefetchw(buf);
-		length = (cmd->length - sizeof(u16)) - sizeof(u32); // 2 = crc16, length field u32 at the beginning
-		memmove(buf, &cmd->data[4], length);
+		length = (cmd->length - sizeof(u16)); // 2 = crc16, length field u32 at the beginning
+		memmove(buf, cmd->data, length);
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < ep->ep_usb.maxpacket)
 			done = 1;
@@ -323,7 +323,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 				struct vusb_ep* ep = vusb_get_ep(udc, irq);
 				// schedule a setup packet
 				if (ep)
-					schedule_work(&ep->wk_irq_data);
+					queue_work(udc->irq_work, &ep->wk_irq_data);
 				pipeirq &= ~BIT(irq);
 			}
 		}
