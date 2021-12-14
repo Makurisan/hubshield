@@ -249,7 +249,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
     //UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
 		prefetchw(buf);
-		length = (cmd->length - sizeof(u16)); // 2 = crc16, length field u32 at the beginning
+		// subtract the crc16 from the end
+		length = (cmd->length - sizeof(u16)); 
 		memmove(buf, cmd->data, length);
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < ep->ep_usb.maxpacket)
@@ -263,7 +264,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     udc->spitransfer[1] = req->ep->idx;
     memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
-    if (length < psz) {
+    UDCVDBG(ep->udc, "************ vusb_do_data, name:%s, length: %d, psz:%d\n", ep->name, length, psz);
+    if (length <= psz) {
       done = 1;
     }
 
