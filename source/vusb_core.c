@@ -201,13 +201,15 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	psz = ep->ep_usb.maxpacket;
 	length = req->usb_req.length - req->usb_req.actual;
+	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d, actual:%d\n", ep->name, ep->idx,
+		ep->eptype, req->usb_req.length, req->usb_req.actual);
+
 	length = min(length, psz);
 
 	if (length == 0) {
 		done = 1;
 		goto xfer_done;
 	}
-	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
 
 	done = 0;
 
@@ -267,7 +269,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
 		// write ack each time data appears
-    if (ep->eptype == REG_EP_INTERRUPT && length <= psz)
+    if (ep->eptype == REG_EP_INTERRUPT && length < psz)
       done = 1;
 		// write ack if the first packet is less maxpacket size
     if (ep->eptype == REG_EP_BULK && length < psz)
@@ -279,9 +281,6 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	if (req->usb_req.actual == req->usb_req.length)
 		done = 1;
-
-	//UDCVDBG(udc, "***** vusb_req_dodata add, name: %s, length: %d psz: %d, done:%d\n", ep->name, req->usb_req.length,
-	//	req->usb_req.actual, done);
 
 xfer_done:
 	if (done) { 

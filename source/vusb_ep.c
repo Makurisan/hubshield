@@ -264,7 +264,8 @@ static void vusb_ep_data(struct work_struct* work)
   }
   if (ep->dir == USB_DIR_IN) {
     //UDCVDBG(ep->udc, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
-    vusb_do_data(ep->udc, ep);
+    //vusb_do_data(ep->udc, ep);
+    while (vusb_do_data(ep->udc, ep));
   }
 
 }
