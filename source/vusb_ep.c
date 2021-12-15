@@ -66,6 +66,7 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   ep->todo |= ENABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
+  ep->eptype = desc->bmAttributes;
   UDCVDBG(ep->udc, "vusb_ep_enable name:%s, ep/idx: %d, addr: %x, maxp:%x, bmattrib: %d\n", ep->name, ep->idx, 
         desc->bEndpointAddress, maxp, desc->bmAttributes);
 

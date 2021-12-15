@@ -207,8 +207,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		done = 1;
 		goto xfer_done;
 	}
-	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, reqtype: %x, request:%x, length:%d\n", ep->name, ep->idx, ep->setup.bRequestType, 
-		ep->setup.bRequest, length);
+	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
 
 	done = 0;
 
@@ -253,21 +252,26 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 		length = (cmd->length - sizeof(u16)); 
 		memmove(buf, cmd->data, length);
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
-		if (length < ep->ep_usb.maxpacket)
+		if (length < psz)
 			done = 1;
 	}
 
 	if (ep->dir == USB_DIR_IN) {
-    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
-    prefetch(buf);
+		if (ep->eptype == REG_EP_BULK)
+			pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+		else
+      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
+		prefetch(buf);
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx;
     memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
-    UDCVDBG(ep->udc, "************ vusb_do_data, name:%s, length: %d, psz:%d\n", ep->name, length, psz);
-    if (length <= psz) {
+		// write ack each time data appears
+    if (ep->eptype == REG_EP_INTERRUPT && length <= psz)
       done = 1;
-    }
+		// write ack if the first packet is less maxpacket size
+    if (ep->eptype == REG_EP_BULK && length < psz)
+      done = 1;
 
   }
 
@@ -288,8 +292,10 @@ xfer_done:
 		spin_unlock_irqrestore(&ep->lock, flags);
 
 		// todo must be changed to 
-		if (ep->ep_usb.caps.dir_in)
-			vusb_spi_pipe_ack(udc, ep);
+		if (ep->ep_usb.caps.dir_in) {
+			UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
+      vusb_spi_pipe_ack(udc, ep);
+		}
 		vusb_req_done(req, 0);
 		return false;
 	}
@@ -406,6 +412,12 @@ static void vusb_port_start(struct work_struct* work)
   u8 transfer[24];
 
 	// control pipe
+  
+	// define the maxpacketsize
+  transfer[0] = REG_PIPE_MAXPKTS; // reg
+  transfer[1] = ep->idx; // pipe num
+  transfer[2] = 0x40;			// field to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
 	// register the control ep on the port in the hub
 	transfer[0] = REG_PIPE_PORT; // reg
@@ -419,6 +431,8 @@ static void vusb_port_start(struct work_struct* work)
   transfer[2] = 1;			// value to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 	//UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
+
+  // port setting
 
   // remote or local port
   transfer[0] = PORT_REG_DEVTYPE; // reg

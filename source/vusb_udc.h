@@ -266,6 +266,7 @@ struct vusb_ep {
   int idx; // pipe index on MCU
   int port;   // port on MCU
   unsigned int maxpacket;
+  reg_ep_type eptype; // ctrl, bulk, interrupt
   spinlock_t lock;
   int halted;
   u32 todo;
