@@ -201,8 +201,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	psz = ep->ep_usb.maxpacket;
 	length = req->usb_req.length - req->usb_req.actual;
-	UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d, actual:%d\n", ep->name, ep->idx,
-		ep->eptype, req->usb_req.length, req->usb_req.actual);
+	//UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d, actual:%d\n", ep->name, ep->idx,
+	//	ep->eptype, req->usb_req.length, req->usb_req.actual);
 
 	length = min(length, psz);
 
@@ -222,7 +222,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       vusb_read_buffer(udc, VUSB_REG_MAP_PIPE_GET, udc->spitransfer, length + 2 * sizeof(u8));
       spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
       memmove(buf, cmd->data, length); // mcu pipe index
-      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
+      //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
       prefetchw(buf);
 		}	else {
       prefetch(buf);
@@ -230,7 +230,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       udc->spitransfer[1] = req->ep->idx;
       memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
       vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
-      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
+      //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
 		}
 		if (length < psz) {
 			done = 1;
@@ -242,7 +242,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
     length = min(length, psz);
 
-    u8 transfer[68];
+    u8 transfer[80];
     // OUT data from the mcu...
     transfer[0] = REG_PIPE_FIFO; // write&read register
     transfer[1] = ep->idx; // pipe
@@ -259,22 +259,18 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	}
 
 	if (ep->dir == USB_DIR_IN) {
-		if (ep->eptype == REG_EP_BULK)
-			pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+		if (ep->eptype == REG_EP_BULK) {
+			//pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+		}
 		else
       pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
 		prefetch(buf);
     udc->spitransfer[0] = REG_PIPE_FIFO;
-    udc->spitransfer[1] = req->ep->idx;
-    memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
+    udc->spitransfer[1] = req->ep->idx; // mcu pipe index
+    memmove(&udc->spitransfer[2], buf, length); 
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
-		// write ack each time data appears
-    if (ep->eptype == REG_EP_INTERRUPT && length < psz)
+    if (length < psz)
       done = 1;
-		// write ack if the first packet is less maxpacket size
-    if (ep->eptype == REG_EP_BULK && length < psz)
-      done = 1;
-
   }
 
 	req->usb_req.actual += length;
@@ -290,9 +286,10 @@ xfer_done:
 		list_del_init(&req->queue);
 		spin_unlock_irqrestore(&ep->lock, flags);
 
-		// todo must be changed to 
-		if (ep->ep_usb.caps.dir_in) {
-			UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
+		// ack read and write
+		if (/*ep->ep_usb.caps.dir_in*/1) {
+			if(ep->dir == USB_DIR_OUT)
+				UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
       vusb_spi_pipe_ack(udc, ep);
 		}
 		vusb_req_done(req, 0);
