@@ -201,8 +201,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	psz = ep->ep_usb.maxpacket;
 	length = req->usb_req.length - req->usb_req.actual;
-	//UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d, actual:%d\n", ep->name, ep->idx,
-	//	ep->eptype, req->usb_req.length, req->usb_req.actual);
+	//UDCVDBG(udc, "vusb_do_data, name: %s, ep/idx: %d, eptype: %d, length: %d, actual:%d, psz: %d\n", ep->name, ep->idx,
+	//	ep->eptype, req->usb_req.length, req->usb_req.actual, psz);
 
 	length = min(length, psz);
 
@@ -248,7 +248,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     transfer[1] = ep->idx; // pipe
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    //UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
+    UDCVDBG(ep->udc, "vusb_do_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
 		prefetchw(buf);
 		// subtract the crc16 from the end
 		length = (cmd->length - sizeof(u16)); 
@@ -259,11 +259,11 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	}
 
 	if (ep->dir == USB_DIR_IN) {
-		if (ep->eptype == REG_EP_BULK) {
-			//pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
-		}
-		else
-      pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
+		//if (ep->eptype == REG_EP_BULK) {
+		//	pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+		//}
+		//else
+		//  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
 		prefetch(buf);
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx; // mcu pipe index
@@ -287,9 +287,9 @@ xfer_done:
 		spin_unlock_irqrestore(&ep->lock, flags);
 
 		// ack read and write
-		if (/*ep->ep_usb.caps.dir_in*/1) {
-			if(ep->dir == USB_DIR_OUT)
-				UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
+		if (1/*ep->ep_usb.caps.dir_in*/) {
+			//if(ep->dir == USB_DIR_OUT)
+				//UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
       vusb_spi_pipe_ack(udc, ep);
 		}
 		vusb_req_done(req, 0);
@@ -303,6 +303,7 @@ xfer_done:
 
 static void vusb_irq_mcu_handler(struct work_struct* work)
 {
+	unsigned long flags;
 	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq);
 
 	u8 transfer[48];
@@ -310,7 +311,22 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 
 		vusb_req_map_t irq_map;
 		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
-		u8 usbirq = irq_map.USBIRQ & irq_map.USBIEN;
+		
+		u8 portirq = irq_map.PRTIRQ & irq_map.PRTIEN;
+		// port handling
+		if (portirq) {
+			transfer[0] = REG_PRTIRQ;
+			transfer[1] = portirq;
+			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
+			while (hweight32(portirq)) {
+				u16 port = _bf_ffsl(portirq);
+				UDCVDBG(udc, "Port IRQ RESET raised on port:%d\n", port);
+				spin_lock_irqsave(&udc->lock, flags);
+				usb_gadget_udc_reset(&udc->gadget, udc->driver);
+				spin_unlock_irqrestore(&udc->lock, flags);
+				portirq &= ~BIT(port);
+			}
+		}
 
 	// pipe handling
 		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
@@ -332,6 +348,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			}
 		}
 
+		u8 usbirq = irq_map.USBIRQ & irq_map.USBIEN;
 		if (usbirq & SRESIRQ) {
 			UDCVDBG(udc, "USB-Reset start\n");
 			transfer[0] = REG_USBIRQ;

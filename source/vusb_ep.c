@@ -152,7 +152,7 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
 
 #ifdef _DEBUG
   spin_lock_irqsave(&ep->lock, flags);
-  void *buf = req->usb_req.buf + req->usb_req.actual;
+  void* buf = req->usb_req.buf + req->usb_req.actual;
   int length = req->usb_req.length - req->usb_req.actual;
   int psz = ep->ep_usb.maxpacket;
   length = min(length, psz);
@@ -160,13 +160,13 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   spin_unlock_irqrestore(&ep->lock, flags);
 #endif // _DEBUG
 
+
   spin_lock_irqsave(&ep->lock, flags);
   list_add_tail(&req->queue, &ep->queue);
   spin_unlock_irqrestore(&ep->lock, flags);
 
   schedule_work(&ep->wk_data);
   //UDCVDBG(ep->udc, "vusb_ep_queue, name: %s pipe: %d, cnt:%d\n", ep->name, ep->pipe, list_empty(&ep->queue));
-
   return 0;
 }
 
@@ -237,6 +237,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
     memmove(&ep->setup, cmd->data, sizeof(struct usb_ctrlrequest));
     // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
+    //UDCVDBG(ep->udc, "vusb_ep_irq_data - ctrl, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
     ep->ep0_dir = ep->setup.bRequestType & USB_DIR_IN? USB_DIR_IN:USB_DIR_OUT;
     vusb_handle_setup(ep);
   } else
@@ -255,18 +256,18 @@ static void vusb_ep_data(struct work_struct* work)
 
   if (ep->dir == USB_DIR_BOTH) {
     // process all the control data from the list
-    while (vusb_do_data(ep->udc, ep));
-  }
+    while(vusb_do_data(ep->udc, ep));
+  } else
   if (ep->dir == USB_DIR_OUT) {
     // the ack of the OUT packet
     //vusb_spi_pipe_ack(ep->udc, ep);
     UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
-    vusb_do_data(ep->udc, ep);
-  }
+    //vusb_do_data(ep->udc, ep);
+  } else
   if (ep->dir == USB_DIR_IN) {
     //UDCVDBG(ep->udc, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
     //vusb_do_data(ep->udc, ep);
-    while (vusb_do_data(ep->udc, ep));
+    /*while*/ (vusb_do_data(ep->udc, ep));
   }
 
 }
