@@ -67,7 +67,9 @@ static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descript
   spin_unlock_irqrestore(&ep->lock, flags);
 
   ep->eptype = desc->bmAttributes;
-  UDCVDBG(ep->udc, "vusb_ep_enable name:%s, ep/idx: %d, addr: %x, maxp:%x, bmattrib: %d\n", ep->name, ep->idx, 
+  ep->maxpacket = usb_endpoint_maxp(desc);
+
+  UDCVDBG(ep->udc, "vusb_ep_enable name:%s, ep/idx: %d, addr: %x, maxp:%d, bmattrib: %d\n", ep->name, ep->idx, 
         desc->bEndpointAddress, maxp, desc->bmAttributes);
 
   // schedule to work
@@ -244,6 +246,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
   if (ep->dir == USB_DIR_OUT) {
     //UDCVDBG(ep->udc, "vusb_ep_irq_data, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
     //pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
+    // read one record from the mcu
     vusb_do_data(ep->udc, ep);
   }
 
@@ -259,11 +262,11 @@ static void vusb_ep_data(struct work_struct* work)
     while(vusb_do_data(ep->udc, ep));
   } else
   if (ep->dir == USB_DIR_OUT) {
-    // the ack of the OUT packet
     //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
+    // prep for the next read...
   } else
   if (ep->dir == USB_DIR_IN) {
-    //UDCVDBG(ep->udc, "vusb_ep_data USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
+    //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
     while (vusb_do_data(ep->udc, ep));
   }
 
@@ -362,13 +365,13 @@ void vusb_eps_init(struct vusb_udc* udc)
     ep->id = idx;
     ep->port = 2; // port on the mcu
     ep->halted = 0;
-    ep->maxpacket = 0;
     ep->ep_usb.name = ep->name;
     ep->ep_usb.ops = &vusb_ep_ops;
     INIT_WORK(&ep->wk_data, vusb_ep_data);
     INIT_WORK(&ep->wk_status, vusb_ep_status);
     INIT_WORK(&ep->wk_irq_data, vusb_ep_irq_data);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
+    ep->maxpacket = ep->ep_usb.maxpacket;
     ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
     ep->ep0_dir = 0; // set while reading setup packet
 
@@ -376,6 +379,7 @@ void vusb_eps_init(struct vusb_udc* udc)
  // ep->pipe = portnr - 1;
       ep->ep_usb.desc = &ep0_desc;
       ep->ep_usb.maxpacket = usb_endpoint_maxp(&ep0_desc);
+      ep->maxpacket = ep->ep_usb.maxpacket;
       ep->ep_usb.caps.type_control = true;
       ep->ep_usb.caps.dir_in = true;
       ep->ep_usb.caps.dir_out = true;

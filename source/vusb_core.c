@@ -145,7 +145,7 @@ void vusb_handle_setup(struct vusb_ep* ep)
 		return;
 	case USB_REQ_CLEAR_FEATURE:
 	case USB_REQ_SET_FEATURE:
-    UDCVDBG(udc, "Clear/Set feature wValue:%d, pipe: %d\n", ep->setup.wValue, ep->idx);
+    UDCVDBG(udc, "Clear/Set feature wValue:%d, ep/idx: %d\n", ep->setup.wValue, ep->idx);
     /* Requests with no data phase, status phase from udc */
 		if ((ep->setup.bRequestType & USB_TYPE_MASK)
 				!= USB_TYPE_STANDARD)
@@ -216,18 +216,17 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	if (ep->dir == USB_DIR_BOTH) {
 		// OUT setup packet
 		if ( ep->ep0_dir == USB_DIR_OUT && ep->setup.wLength)	{
-      length = min(length, psz);
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
       vusb_read_buffer(udc, VUSB_REG_MAP_PIPE_GET, udc->spitransfer, length + 2 * sizeof(u8));
       spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+      prefetchw(buf);
       memmove(buf, cmd->data, length); // mcu pipe index
       //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
-      prefetchw(buf);
 		}	else {
-      prefetch(buf);
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
+      prefetch(buf);
       memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
       vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
       //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - IN");
@@ -248,27 +247,26 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     transfer[1] = ep->idx; // pipe
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
-    UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
+		length = cmd->length; 
+    UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
 		prefetchw(buf);
-		// subtract the crc16 from the end
-		length = (cmd->length - sizeof(u16)); 
 		memmove(buf, cmd->data, length);
-    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+    //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < psz)
 			done = 1;
 	}
 
 	if (ep->dir == USB_DIR_IN) {
 		if (ep->eptype == REG_EP_BULK) {
-			UDCVDBG(ep->udc, "vusb_do_data - EP-BULK-IN, name: %s, ep/idx: %d, cnt: %d\n", ep->name, ep->idx, length);
-			pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+			UDCVDBG(ep->udc, "vusb_do_data - EP-BULK-IN, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
+			//pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
 		}
 		//else
 		//  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
 		//}
-		prefetch(buf);
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx; // mcu pipe index
+		prefetch(buf);
     memmove(&udc->spitransfer[2], buf, length); 
     vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, udc->spitransfer, length + 2 * sizeof(u8));
     if (length < psz)
@@ -289,12 +287,10 @@ xfer_done:
 		spin_unlock_irqrestore(&ep->lock, flags);
 
 		// ack read and write
-		if (1/*ep->ep_usb.caps.dir_in*/) {
-			//if(ep->dir == USB_DIR_OUT)
-				//UDCVDBG(udc, "***** vusb_req_dodata ACK, name: %s, ep/idx: %d, eptype: %d, length: %d\n", ep->name, ep->idx, ep->eptype, length);
-      vusb_spi_pipe_ack(udc, ep);
-		}
+    vusb_spi_pipe_ack(udc, ep);
+
 		vusb_req_done(req, 0);
+
 		return false;
 	}
 	return true;
