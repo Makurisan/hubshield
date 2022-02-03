@@ -261,13 +261,13 @@ static void vusb_ep_data(struct work_struct* work)
   if (ep->dir == USB_DIR_OUT) {
     // the ack of the OUT packet
     //vusb_spi_pipe_ack(ep->udc, ep);
-    UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
+    //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
     //vusb_do_data(ep->udc, ep);
   } else
   if (ep->dir == USB_DIR_IN) {
-    //UDCVDBG(ep->udc, "vusb_ep_data ep-in: %s, pipe: %d\n", ep->name, ep->idx);
+    //UDCVDBG(ep->udc, "vusb_ep_data USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
     //vusb_do_data(ep->udc, ep);
-    /*while*/ (vusb_do_data(ep->udc, ep));
+    while (vusb_do_data(ep->udc, ep));
   }
 
 }
