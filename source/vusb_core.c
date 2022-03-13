@@ -248,7 +248,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
     spi_cmd_t* cmd = (spi_cmd_t*)transfer;
 		length = cmd->length; 
-    UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
+    //UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
 		prefetchw(buf);
 		memmove(buf, cmd->data, length);
     //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
@@ -257,10 +257,10 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	}
 
 	if (ep->dir == USB_DIR_IN) {
-		if (ep->eptype == REG_EP_BULK) {
-			UDCVDBG(ep->udc, "vusb_do_data - EP-BULK-IN, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
-			//pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
-		}
+		//if (ep->eptype == REG_EP_BULK) {
+		//	UDCVDBG(ep->udc, "vusb_do_data - EP-BULK-IN, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
+		//	pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
+		//}
 		//else
 		//  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
 		//}
@@ -304,7 +304,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 	unsigned long flags;
 	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq);
 
-	u8 transfer[48];
+	u8 transfer[64];
 	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
 
 		vusb_req_map_t irq_map;
