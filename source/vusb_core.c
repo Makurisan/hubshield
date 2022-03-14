@@ -29,8 +29,6 @@
 
 extern const struct file_operations vusb_ops;
 
-static const char driver_name[] = "vusb-udc";
-
 /* Forward declaration */
 static int vusb_remove(struct spi_device* spi);
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx);
@@ -401,226 +399,9 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   return iret;
 }
 
-static int vusb_wakeup(struct usb_gadget *gadget)
-{
-	struct vusb_udc *udc = gadget_to_udc(gadget);
-	unsigned long flags;
-	int ret = -EINVAL;
-	dev_info(&udc->spi->dev, "Hub gadget vusb_wakeup.\n");
-	return ret;
-}
-
 #define VUSB_TYPE_CTRL	0
 #define VUSB_TYPE_INT		1
 #define DEBUG
-
-// the function is called with the control pipe of the gadget
-static void vusb_port_start(struct work_struct* work)
-{
-  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
-  struct vusb_udc* udc = ep->udc;
-
-  u8 transfer[24];
-
-	// control pipe
-  
-	// define the maxpacketsize
-  transfer[0] = REG_PIPE_MAXPKTS; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = 0x40;			// field to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-	// register the control ep on the port in the hub
-	transfer[0] = REG_PIPE_PORT; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = ep->port; // port
-  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-  // set enable on control pipe
-  transfer[0] = REG_PIPE_ENABLED; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = 1;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-	//UDCVDBG(udc, "  - port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
-
-  // port setting
-
-  // remote or local port
-  transfer[0] = PORT_REG_DEVTYPE; // reg
-  transfer[1] = ep->port; // port
-  transfer[2] = VUSB_PORT_DEVICE_REMOTE; // field to set; activate remote or local device
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-
-  // set enable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep->port; // port
-  transfer[2] = 1;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-  //UDCVDBG(udc, "  - Pipe: %d on port: %d is enabled name: %s\n", ep->pipe, ep->port, ep->name);
-
-	UDCVDBG(udc, "Hub port %d with ctrl/pipe: %s is now in remote stage and enabled", ep->port, ep->name);
-
-}
-
-static int vusb_udc_start(struct usb_gadget *gadget, struct usb_gadget_driver *driver)
-{
-	struct vusb_udc *udc = gadget_to_udc(gadget);
-  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-
-	unsigned long flags;
-	spin_lock_irqsave(&udc->lock, flags);
-	/* hook up the driver */
-	driver->driver.bus = NULL;
-	udc->driver = driver;
-	udc->gadget.speed = USB_SPEED_FULL;
-
-	udc->gadget.is_selfpowered = udc->is_selfpowered;
-	udc->remote_wkp = 0;
-	udc->softconnect = true;
-	udc->todo |= UDC_START;
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-  INIT_WORK(&ep->wk_udc_work, vusb_port_start);
-	schedule_work(&ep->wk_udc_work);
-
-	//UDCVDBG(udc, "Hub gadget vusb_udc_start\n");
-
-	return 0;
-}
-
-void vusb_nuke(struct vusb_ep* ep, int status);
-
-static void vusb_dev_nuke(struct vusb_udc* udc, int status)
-{
-  unsigned int i;
-
-  for (i = 0; i < VUSB_MAX_EPS; i++) {
-		if (udc->ep[i].ep_usb.caps.dir_in)	{
-      vusb_nuke(&udc->ep[i], status);
-		}
-  }
-}
-
-static void vusb_port_stop(struct work_struct* work)
-{
-	struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
-	struct vusb_udc* udc = ep->udc;
-  //UDCVDBG(udc, "Port %d will be detached", ep->port);
-
-  u8 transfer[24];
-	// set disable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep->port; // port: 2
-  transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-
-}
-
-static int vusb_udc_stop(struct usb_gadget *gadget)
-{
-	struct vusb_udc *udc = gadget_to_udc(gadget);
-  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-	unsigned long flags;
-
-	spin_lock_irqsave(&udc->lock, flags);
-	udc->is_selfpowered = udc->gadget.is_selfpowered;
-	udc->gadget.speed = USB_SPEED_UNKNOWN;
-	udc->driver = NULL;
-	udc->softconnect = false;
-	udc->todo |= UDC_START;
-	spin_unlock_irqrestore(&udc->lock, flags);
-
-  //vusb_dev_nuke(udc, -ESHUTDOWN);
-
-  flush_workqueue(udc->irq_work);
-
-#define DEBUG
-#ifdef DEBUG
-  INIT_WORK(&ep->wk_udc_work, vusb_port_stop);
-  schedule_work(&ep->wk_udc_work);
-#else
-	u8 transfer[24];
-  // set disable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep->port; // port
-  transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-#endif // _DEBUG
-
-
-	UDCVDBG(udc, "Hub device on port: %d is removed.\n", ep->port);
-	return 0;
-}
-
-/*
-	This function predefines and reserve the endpoint pipes on the mcu 
-*/
-static void vusb_configure_pipe(struct work_struct* work)
-{
-  struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
-  struct vusb_udc* udc = ep->udc;
-  u8 transfer[10];
-
-  // set port on control pipe
-  transfer[0] = REG_PIPE_PORT; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = ep->port; // port
-	vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-	UDCVDBG(udc, "- port: %d with  pipe/id: %d ep/name: %s\n", ep->port, ep->idx, ep->name);
-
-  // set the pipe type
-  transfer[0] = REG_PIPE_TYPE; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = ep->ep_usb.caps.type_control?REG_EP_CONTROL:REG_EP_INTERRUPT; // field to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-  // set the pipe type
-  transfer[0] = REG_PIPE_MAXPKTS; // reg
-  transfer[1] = ep->idx; // pipe num
-  transfer[2] = 0x40;			// field to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-}
-
-static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
-	struct usb_endpoint_descriptor* desc,
-	struct usb_ss_ep_comp_descriptor* ep_comp)
-{
-  struct vusb_udc* udc = gadget_to_udc(gadget);
-  struct usb_ep* _ep;
-	struct vusb_ep* ep;
-
-  //UDCVDBG(udc, "Hub vusb_match_ep \n");
-	
-	/* Look at endpoints until an unclaimed one looks usable */
-  list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
-    if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
-      goto found_ep;
-  }
-  /* Fail */
-  return NULL;
-
-found_ep:
-
-	// schedule the ep
-	ep = ep_usb_to_vusb_ep(_ep);
-  INIT_WORK(&ep->wk_udc_work, vusb_configure_pipe);
-  schedule_work(&ep->wk_udc_work);
-
-  //UDCVDBG(udc, "Hub vusb_match_ep ep0:%s\n", ep->name);
-
-	return _ep;
-
-}
-	
-static const struct usb_gadget_ops vusb_udc_ops = {
-	.udc_start	= vusb_udc_start,
-	.udc_stop	= vusb_udc_stop,
-	.wakeup		= vusb_wakeup,
-  .match_ep = vusb_match_ep,
-
-};
 
 static int vusb_probe(struct spi_device *spi)
 {
@@ -656,14 +437,6 @@ static int vusb_probe(struct spi_device *spi)
 
 	dev_info(&spi->dev, "Spi clock set at %u KHz.\n",
                  (udc->spi->max_speed_hz + 500) / 1000);
-
-	/* Setup gadget structure */
-	udc->gadget.ops = &vusb_udc_ops;
-	udc->gadget.max_speed = USB_SPEED_FULL;
-	udc->gadget.speed = USB_SPEED_UNKNOWN;
-	udc->gadget.ep0 = &udc->ep[0].ep_usb;
-	udc->gadget.name = driver_name;
-  udc->gadget.dev.of_node = udc->spi->dev.of_node;
 
   spin_lock_init(&udc->lock);
   spin_lock_init(&udc->wq_lock);
@@ -829,6 +602,7 @@ static const struct of_device_id vusb_udc_of_match[] = {
   {.compatible = "hubshield,v-hub", },
   {},
 };
+
 MODULE_DEVICE_TABLE(of, vusb_udc_of_match);
 
 static struct spi_driver vusb_driver = {
