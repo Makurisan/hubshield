@@ -448,17 +448,16 @@ static void vusb_port_stop(struct work_struct* work)
 
 static int vusb_wakeup(struct usb_gadget* gadget)
 {
-  struct vusb_udc* udc = gadget_to_udc(gadget);
+  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
   unsigned long flags;
   int ret = -EINVAL;
-  dev_info(&udc->spi->dev, "Hub gadget vusb_wakeup.\n");
+  dev_info(&ep->udc->spi->dev, "Hub gadget vusb_wakeup.\n");
   return ret;
 }
 static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
   struct usb_endpoint_descriptor* desc,
   struct usb_ss_ep_comp_descriptor* ep_comp)
 {
-  struct vusb_udc* udc = gadget_to_udc(gadget);
   struct usb_ep* _ep;
   struct vusb_ep* ep;
 
@@ -487,17 +486,18 @@ found_ep:
 
 static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* driver)
 {
-  struct vusb_udc* udc = gadget_to_udc(gadget);
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
+  struct vusb_udc* udc = ep->udc;
+  struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
 
   unsigned long flags;
   spin_lock_irqsave(&udc->lock, flags);
   /* hook up the driver */
   driver->driver.bus = NULL;
   udc->driver = driver;
-  udc->gadget.speed = USB_SPEED_FULL;
+  d->gadget.speed = USB_SPEED_FULL;
 
-  udc->gadget.is_selfpowered = udc->is_selfpowered;
+  d->gadget.is_selfpowered = udc->is_selfpowered;
   udc->remote_wkp = 0;
   udc->softconnect = true;
   udc->todo |= UDC_START;
@@ -524,14 +524,15 @@ static void vusb_dev_nuke(struct vusb_udc* udc, int status)
 
 static int vusb_udc_stop(struct usb_gadget* gadget)
 {
-  struct vusb_udc* udc = gadget_to_udc(gadget);
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
+  struct vusb_udc* udc = ep->udc;
+  struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
   unsigned long flags;
 
   spin_lock_irqsave(&udc->lock, flags);
-  udc->is_selfpowered = udc->gadget.is_selfpowered;
-  udc->gadget.speed = USB_SPEED_UNKNOWN;
-  udc->driver = NULL;
+  udc->is_selfpowered = d->gadget.is_selfpowered;
+  d->gadget.speed = USB_SPEED_UNKNOWN;
+  d->driver = NULL;
   udc->softconnect = false;
   udc->todo |= UDC_START;
   spin_unlock_irqrestore(&udc->lock, flags);
@@ -578,15 +579,15 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int port)
   d->index = port;
   d->name = devm_kasprintf(parent, GFP_KERNEL, "port%d", port + 1);
 
-  INIT_LIST_HEAD(&udc->gadget.ep_list);
+  INIT_LIST_HEAD(&d->gadget.ep_list);
 
   /* Setup gadget structure */
-  udc->gadget.ops = &vusb_udc_ops;
-  udc->gadget.max_speed = USB_SPEED_FULL;
-  udc->gadget.speed = USB_SPEED_UNKNOWN;
-  udc->gadget.ep0 = &udc->ep[0].ep_usb;
-  udc->gadget.name = KBUILD_MODNAME;
-  udc->gadget.dev.of_node = udc->spi->dev.of_node;
+  d->gadget.ops = &vusb_udc_ops;
+  d->gadget.max_speed = USB_SPEED_FULL;
+  d->gadget.speed = USB_SPEED_UNKNOWN;
+  d->gadget.ep0 = &udc->ep[0].ep_usb;
+  d->gadget.name = KBUILD_MODNAME;
+  d->gadget.dev.of_node = udc->spi->dev.of_node;
 
   int idx;
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
@@ -639,11 +640,11 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int port)
     ep->ep_usb.caps.type_int = true;
     ep->ep_usb.caps.type_bulk = true;
 
-    list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
+    list_add_tail(&ep->ep_usb.ep_list, &d->gadget.ep_list);
   }
 
   // gadget must be the last activated in the probe
-  rc = usb_add_gadget_udc(&udc->spi->dev, &udc->gadget);
+  rc = usb_add_gadget_udc(&udc->spi->dev, &d->gadget);
   if (rc) {
     dev_err(&udc->spi->dev, "UDC gadget could not be added\n");
     return rc;

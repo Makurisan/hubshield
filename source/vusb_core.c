@@ -37,16 +37,17 @@ static void vusb_getstatus(struct vusb_ep* ep)
 {
 	u16 status = 0;
 	struct vusb_udc* udc = ep->udc;
+	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
 	struct vusb_ep* _ep;
 
 	switch (ep->setup.bRequestType & USB_RECIP_MASK) {
 	case USB_RECIP_DEVICE:
 		/* Get device status */
-		status = udc->gadget.is_selfpowered << USB_DEVICE_SELF_POWERED;
+		status = d->gadget.is_selfpowered << USB_DEVICE_SELF_POWERED;
 		status |= (udc->remote_wkp << USB_DEVICE_REMOTE_WAKEUP);
 		break;
 	case USB_RECIP_INTERFACE:
-		if (udc->driver->setup(&udc->gadget, &ep->setup) < 0)
+		if (udc->driver->setup(&d->gadget, &ep->setup) < 0)
 			goto stall;
 		break;
 	case USB_RECIP_ENDPOINT:
@@ -115,6 +116,7 @@ static void vusb_set_clear_feature(struct vusb_ep* ep)
 void vusb_handle_setup(struct vusb_ep* ep)
 {
 	struct vusb_udc* udc = ep->udc;
+	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
 
 	//ep->setup = setup;
 	//ep->setup.wValue = cpu_to_le16(setup.wValue);
@@ -154,7 +156,7 @@ void vusb_handle_setup(struct vusb_ep* ep)
 	}
 
   //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
-	if (udc->driver != NULL && udc->driver->setup(&udc->gadget, &ep->setup) < 0) {
+	if (udc->driver != NULL && udc->driver->setup(&d->gadget, &ep->setup) < 0) {
     UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, ep->setup.bRequestType, ep->setup.bRequest);
     // prints the setup packet which leads to the error
 		pr_hex_mark_debug((void*)&ep->setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
@@ -316,9 +318,10 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			vusb_write_buffer(udc, VUSB_REG_IRQ_CLEAR, transfer, 2);
 			while (hweight32(portirq)) {
 				u16 port = _bf_ffsl(portirq);
+				struct vusb_port_dev* d = &udc->ports[port - 1].dev;
 				UDCVDBG(udc, "Port IRQ RESET raised on port:%d\n", port);
 				spin_lock_irqsave(&udc->lock, flags);
-				usb_gadget_udc_reset(&udc->gadget, udc->driver);
+				usb_gadget_udc_reset(&d->gadget, udc->driver);
 				spin_unlock_irqrestore(&udc->lock, flags);
 				portirq &= ~BIT(port);
 			}
@@ -575,7 +578,13 @@ static int vusb_remove(struct spi_device *spi)
 
   cdev_del(&udc->cdev);
 
-	usb_del_gadget_udc(&udc->gadget);
+	u8 i;
+	for (i = 0; i < udc->max_ports; i++) {
+		struct vusb_port_dev* d = &udc->ports[i].dev;
+		if (d->registered) {
+			usb_del_gadget_udc(&d->gadget);
+		}
+	}
 
   // remove the char device
   device_destroy(udc->chardev_class, MKDEV(udc->crdev_major, 1));

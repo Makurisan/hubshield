@@ -360,7 +360,6 @@ struct vusb_udc {
   struct vusb_port* ports;
   u32			max_ports;
 
-  struct usb_gadget gadget;
   struct vusb_ep ep[VUSB_MAX_EPS];
 
   struct usb_gadget_driver* driver;
