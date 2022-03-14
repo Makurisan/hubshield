@@ -592,9 +592,8 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
 	struct vusb_ep* ep;
 
   //UDCVDBG(udc, "Hub vusb_match_ep \n");
-
-
-  /* Look at endpoints until an unclaimed one looks usable */
+	
+	/* Look at endpoints until an unclaimed one looks usable */
   list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
     if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
       goto found_ep;
@@ -650,7 +649,7 @@ static int vusb_probe(struct spi_device *spi)
   // change to device tree later
   rc = of_property_read_u32(np, "max-ports", &udc->max_ports);
   if (rc < 0) {
-    dev_err(&spi->dev, "Unable to allocate hub downstreams ports.\n");
+    dev_err(&spi->dev, "Unable to get hub downstreams ports.\n");
     return -ENOMEM;
   }
 	dev_info(&spi->dev, "Hub device has initiated %d hub ports.\n", udc->max_ports);

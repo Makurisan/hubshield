@@ -98,6 +98,8 @@ static ssize_t vusb_chrdev_read(struct file* file, char __user* buf, size_t coun
 static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size_t count, loff_t* offset)
 {
   struct vusb_udc* udc;
+  u8 transfer[24];
+
   udc = file->private_data;
   const size_t maxdatalen = 120;
   uint8_t *data = kmalloc(maxdatalen, GFP_KERNEL);
@@ -114,16 +116,16 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
         break;
       }
       if (strncasecmp(&data[i], &vusb_send_tab[j].chr[0], 1) == 0)  {
-        memset(udc->transfer, 0, VUSB_SPI_BUFFER_LENGTH);
-        udc->transfer[0] = vusb_send_tab[j].port;
+        memset(transfer, 0, sizeof(transfer));
+        transfer[0] = vusb_send_tab[j].port;
         if (vusb_send_tab[j].length > 1) {
-          udc->transfer[1] = '1';
+          transfer[1] = '1';
           if (isdigit(data[i + 1])) {
-            kstrtou8(&data[i + 1], 10, &udc->transfer[1]);
+            kstrtou8(&data[i + 1], 10, &transfer[1]);
           }
         }
-        vusb_write_buffer(udc, vusb_send_tab[j].cmd, udc->transfer, vusb_send_tab[j].length);
-        //pr_hex_mark(udc->transfer, vusb_send_tab[j].length, PRINTF_READ, "chrdev");
+        vusb_write_buffer(udc, vusb_send_tab[j].cmd, transfer, vusb_send_tab[j].length);
+        //pr_hex_mark(transfer, vusb_send_tab[j].length, PRINTF_READ, "chrdev");
         //msleep_interruptible(100);
         break;
       }

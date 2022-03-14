@@ -31,20 +31,13 @@
 static int wakeup_flag = 0;
 static ktime_t wait_endtime;
 
-
-void vusb_spi_pipe_attach(struct vusb_udc* udc, u8 port)
-{
-  udc->spitransfer[0] = '1';
-  udc->spitransfer[1] = udc->spitransfer[0];
-  vusb_write_buffer(udc, VUSB_REG_PORT_ATTACH, udc->spitransfer, sizeof(u8) * 2);
-}
-
 void vusb_spi_pipe_ack(struct vusb_udc* udc, struct vusb_ep *ep)
 {
 #ifdef _DEBUG
-  udc->spitransfer[0] = REG_PIPEIRQ;
-  *(u32*)&udc->spitransfer[1] = htonl(BIT(irq)); // take one bit
-  vusb_write_buffer(udc, VUSB_REG_ACK, udc->spitransfer, sizeof(u8) + sizeof(u32));
+  u8 transfer[10];
+  transfer[0] = REG_PIPEIRQ;
+  *(u32*)&transfer[1] = htonl(BIT(irq)); // take one bit
+  vusb_write_buffer(udc, VUSB_REG_ACK, transfer, sizeof(u8) + sizeof(u32));
 #endif // _DEBUG
   u8 transfer[10];
   // set port on control pipe
@@ -147,7 +140,6 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
       rc = _internal_read_buffer(udc, reg, buffer, length, showpart);
     } else {
       //UDCVDBG(udc, "Mcu wait event error for spi read\n");
-      //memset(udc->spitransfer + VUSB_SPI_HEADER, 0, length );
       rc = -6;
     }
   }
@@ -191,7 +183,7 @@ static int _internal_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 l
       return cmd->length;
     }
     else {
-      pr_hex_mark(udc->spitransfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
+      pr_hex_mark(udc->transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, "crc8 error");
       //UDCVDBG(udc, "mcu read crc8 %d error!\n", cmd->length);
       return -1;
     }
