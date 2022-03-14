@@ -272,10 +272,12 @@ struct vusb_ep {
   u32 todo;
   u8 dir;
   u8 ep0_dir; // ctrl ep direction IN/OUT
-  int id;
+  u8 dev_idx; // device idx
 };
 
 struct vusb_port_dev {
+
+  struct vusb_udc* udc;
 
   /* Device index (zero-based) and name string */
   unsigned int index;
@@ -291,7 +293,6 @@ struct vusb_port_dev {
 
   /* Endpoint structures */
   struct vusb_ep ep[VUSB_MAX_EPS];
-
 
 };
 

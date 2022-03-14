@@ -574,6 +574,10 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int port)
   struct device* parent = &udc->spi->dev;
   int rc;
 
+  d->udc = udc;
+  d->index = port;
+  d->name = devm_kasprintf(parent, GFP_KERNEL, "port%d", port + 1);
+
   INIT_LIST_HEAD(&udc->gadget.ep_list);
 
   /* Setup gadget structure */
@@ -590,9 +594,9 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int port)
 
     spin_lock_init(&ep->lock);
     INIT_LIST_HEAD(&ep->queue);
-
+    ep->dev_idx = port; // device idx on linux
     ep->udc = udc;
-    ep->id = idx;
+// todo: temp....
     ep->port = 2; // port on the mcu
     ep->halted = 0;
     ep->ep_usb.name = ep->name;
@@ -637,6 +641,15 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int port)
 
     list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
   }
+
+  // gadget must be the last activated in the probe
+  rc = usb_add_gadget_udc(&udc->spi->dev, &udc->gadget);
+  if (rc) {
+    dev_err(&udc->spi->dev, "UDC gadget could not be added\n");
+    return rc;
+  }
+  d->registered = true;
+
   return 0;
 
 }

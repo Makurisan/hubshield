@@ -553,15 +553,8 @@ static int vusb_probe(struct spi_device *spi)
 
   udc->irq_work = create_singlethread_workqueue("spihubirq");
 
-	// gadget must be the last activated in the probe
-	rc = usb_add_gadget_udc(&spi->dev, &udc->gadget);
-  if (rc) {
-    dev_err(&spi->dev, "UDC gadget could not be added\n");
-    return rc;
-  }
-
-  usb_udc_vbus_handler(&udc->gadget, true);
-  usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
+  //usb_udc_vbus_handler(&udc->gadget, true);
+  //usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 
 	return 0;
 err:
