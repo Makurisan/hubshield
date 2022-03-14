@@ -275,6 +275,35 @@ struct vusb_ep {
   int id;
 };
 
+struct vusb_port_dev {
+
+  /* Device index (zero-based) and name string */
+  unsigned int index;
+  const char* name;
+
+  /* sysfs enclosure for the gadget gunk */
+  struct device* port_dev;
+
+  /* Link to gadget core */
+  struct usb_gadget		gadget;
+  struct usb_gadget_driver* driver;
+  bool				registered : 1;
+
+  /* Endpoint structures */
+  struct vusb_ep ep[VUSB_MAX_EPS];
+
+
+};
+
+#define to_vusb_dev(__g) container_of(__g, struct vusb_port_dev, gadget)
+
+struct vusb_port {
+  /* Port status & status change registers */
+  u16			status;
+  u16			change;
+  struct vusb_port_dev dev;
+};
+
 #pragma pack(1)
 typedef union {
   struct {
@@ -327,7 +356,7 @@ struct vusb_udc {
   int crdev_major;
 
   /* Per-port info */
-  //struct vusb_port* ports;
+  struct vusb_port* ports;
   u32			max_ports;
 
   struct usb_gadget gadget;
@@ -337,8 +366,6 @@ struct vusb_udc {
 
   int remote_wkp, is_selfpowered;
   bool softconnect;
-
-  struct device* dev;
 
   spinlock_t lock;
   spinlock_t wq_lock;
@@ -354,7 +381,7 @@ void pr_hex_mark(const char* mem, int count, int mark, const char* label);
 void pr_hex_mark_debug(const char* mem, int count, int mark, const char* label, const char* debug);
 int vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
 int vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length);
-void vusb_eps_init(struct vusb_udc* udc);
+int vusb_port_init(struct vusb_udc* udc, unsigned int idx);
 void vusb_req_done(struct vusb_req* req, int status);
 void vusb_nuke(struct vusb_ep* ep, int status);
 irqreturn_t vusb_spi_dtrdy(int irq, void* dev_id);

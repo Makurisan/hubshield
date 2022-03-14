@@ -568,9 +568,11 @@ static const struct usb_gadget_ops vusb_udc_ops = {
 
 static const char driver_name[] = "vusb-udc";
 
-void vusb_eps_init(struct vusb_udc* udc)
+int vusb_port_init(struct vusb_udc* udc, unsigned int port)
 {
-  int idx;
+  struct vusb_port_dev* d = &udc->ports[port].dev;
+  struct device* parent = &udc->spi->dev;
+  int rc;
 
   INIT_LIST_HEAD(&udc->gadget.ep_list);
 
@@ -582,6 +584,7 @@ void vusb_eps_init(struct vusb_udc* udc)
   udc->gadget.name = KBUILD_MODNAME;
   udc->gadget.dev.of_node = udc->spi->dev.of_node;
 
+  int idx;
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &udc->ep[idx];
 
@@ -634,5 +637,6 @@ void vusb_eps_init(struct vusb_udc* udc)
 
     list_add_tail(&ep->ep_usb.ep_list, &udc->gadget.ep_list);
   }
+  return 0;
 
 }

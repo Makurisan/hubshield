@@ -433,6 +433,11 @@ static int vusb_probe(struct spi_device *spi)
     dev_err(&spi->dev, "Unable to get hub downstreams ports.\n");
     return -ENOMEM;
   }
+	
+	udc->ports = devm_kcalloc(&spi->dev, udc->max_ports, sizeof(*udc->ports), GFP_KERNEL);
+	if (!udc->ports)
+		return -ENOMEM;
+
 	dev_info(&spi->dev, "Hub device has initiated %d hub ports.\n", udc->max_ports);
 
 	dev_info(&spi->dev, "Spi clock set at %u KHz.\n",
@@ -446,8 +451,13 @@ static int vusb_probe(struct spi_device *spi)
 	mutex_init(&udc->spi_read_mutex);
 	mutex_init(&udc->spi_write_mutex);
 
-	/* setup Endpoints */
-	vusb_eps_init(udc);
+	/* setup ports */
+	vusb_port_init(udc, 0);
+	//for (i = 0; i < vhub->max_ports && rc == 0; i++)
+	//	rc = vusb_port_init(vhub, i);
+	//if (rc)
+	//	goto err;
+
 
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
   if (!udc->transfer) {
@@ -467,8 +477,6 @@ static int vusb_probe(struct spi_device *spi)
 
   /* Init crc8 */
   crc8_populate_msb(udc->crc_table, 0x7);
-// udc gagdet dev ?????
-	udc->dev = &udc->gadget.dev;
 
 	spi_set_drvdata(spi, udc);
 
