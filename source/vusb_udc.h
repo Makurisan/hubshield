@@ -250,17 +250,16 @@ struct vusb_pipe {
   u8  pipe_idx; // MCU device ID
   u8  port;
   struct vusb_ep* ep;
-  struct usb_gadget *gadget;
 };
 
 struct vusb_ep {
   struct usb_ep ep_usb;
   struct vusb_udc* udc;
   struct usb_ctrlrequest setup;   // only relevant for ctrl pipes
-  struct work_struct wk_udc_work; // port ep0 udc work start/stop
   struct work_struct wk_data;     // ep data handling
   struct work_struct wk_status;   // ep status handling
   struct work_struct wk_irq_data; // mcu pipe
+  struct work_struct wk_udc_work; // 
   struct list_head queue;
   char name[VUSB_EPNAME_SIZE];
   int idx; // pipe index on MCU
@@ -277,7 +276,7 @@ struct vusb_ep {
 
 struct vusb_port_dev {
 
-  struct vusb_udc* udc;
+  //struct vusb_udc* udc;
 
   /* Device index (zero-based) and name string */
   unsigned int index;
@@ -293,6 +292,9 @@ struct vusb_port_dev {
 
   /* Endpoint structures */
   struct vusb_ep ep[VUSB_MAX_EPS];
+
+  struct work_struct wk_stop;     // port ep0 udc work stop
+  struct work_struct wk_start;    // port ep0 udc work start
 
 };
 
@@ -338,9 +340,10 @@ struct vusb_udc {
   struct mutex spi_read_mutex;
   struct mutex spi_write_mutex;
 
-  struct workqueue_struct* irq_work;
+  struct work_struct	vusb_irq_wq_mcu;
+  struct workqueue_struct* irq_work_data;
+  struct workqueue_struct* irq_work_mcu;
 
-  struct work_struct	vusb_irq_wq;
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;
   int mcu_reset;
@@ -360,7 +363,7 @@ struct vusb_udc {
   struct vusb_port* ports;
   u32			max_ports;
 
-  struct vusb_ep ep[VUSB_MAX_EPS];
+  //struct vusb_ep ep[VUSB_MAX_EPS];
 
   struct usb_gadget_driver* driver;
 

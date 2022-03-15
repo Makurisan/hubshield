@@ -72,7 +72,9 @@ stall:
 static void vusb_set_clear_feature(struct vusb_ep* ep)
 {
 	struct vusb_udc* udc = ep->udc;
+	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
 	struct vusb_ep *_ep;
+
 	int set = ep->setup.bRequest == USB_REQ_SET_FEATURE;
 	unsigned long flags;
 	int id;
@@ -94,7 +96,7 @@ static void vusb_set_clear_feature(struct vusb_ep* ep)
 			break;
 
 		id = ep->setup.wIndex & USB_ENDPOINT_NUMBER_MASK;
-		_ep = &udc->ep[id];
+		_ep = &d->ep[id];
 
 		spin_lock_irqsave(&_ep->lock, flags);
 		_ep->todo &= ~STALL_EP;
@@ -152,6 +154,7 @@ void vusb_handle_setup(struct vusb_ep* ep)
 			break;
 		return vusb_set_clear_feature(ep);
 	default:
+		UDCVDBG(udc, "Default vusb_handle_setup request: %d\n", ep->setup.bRequest);
 		break;
 	}
 
@@ -302,7 +305,9 @@ xfer_done:
 static void vusb_irq_mcu_handler(struct work_struct* work)
 {
 	unsigned long flags;
-	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq);
+	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq_mcu);
+
+	//UDCVDBG(udc, "List pointer:%p, :%p, :%p\n", &work->entry, work->entry.next, work->entry.prev);
 
 	u8 transfer[64];
 	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
@@ -320,9 +325,9 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 				u16 port = _bf_ffsl(portirq);
 				struct vusb_port_dev* d = &udc->ports[port - 1].dev;
 				UDCVDBG(udc, "Port IRQ RESET raised on port:%d\n", port);
-				spin_lock_irqsave(&udc->lock, flags);
+				//spin_lock_irqsave(&udc->lock, flags);
 				usb_gadget_udc_reset(&d->gadget, udc->driver);
-				spin_unlock_irqrestore(&udc->lock, flags);
+				//spin_unlock_irqrestore(&udc->lock, flags);
 				portirq &= ~BIT(port);
 			}
 		}
@@ -341,8 +346,9 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 				u32 irq = _bf_ffsl(pipeirq);
 				struct vusb_ep* ep = vusb_get_ep(udc, irq);
 				// schedule a setup packet
-				if (ep)
-					queue_work(udc->irq_work, &ep->wk_irq_data);
+				if (ep && list_empty(&ep->wk_irq_data.entry)) {
+					queue_work(udc->irq_work_data, &ep->wk_irq_data);
+				}
 				pipeirq &= ~BIT(irq);
 			}
 		}
@@ -392,11 +398,9 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   {
     unsigned long flags;
     struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip && udc->softconnect)
+    if (chip && udc->softconnect && list_empty(&udc->vusb_irq_wq_mcu.entry))
     {
-      spin_lock_irqsave(&udc->wq_lock, flags);
-			queue_work(udc->irq_work, &udc->vusb_irq_wq);
-			spin_unlock_irqrestore(&udc->wq_lock, flags);
+			queue_work(udc->irq_work_mcu, &udc->vusb_irq_wq_mcu);
     }
   }
   return iret;
@@ -437,7 +441,7 @@ static int vusb_probe(struct spi_device *spi)
     return -ENOMEM;
   }
 	
-	udc->ports = devm_kcalloc(&spi->dev, udc->max_ports, sizeof(*udc->ports), GFP_KERNEL);
+	udc->ports = devm_kcalloc(&spi->dev, udc->max_ports, sizeof(struct vusb_port), GFP_KERNEL);
 	if (!udc->ports)
 		return -ENOMEM;
 
@@ -453,14 +457,6 @@ static int vusb_probe(struct spi_device *spi)
   init_waitqueue_head(&udc->spi_read_queue);
 	mutex_init(&udc->spi_read_mutex);
 	mutex_init(&udc->spi_write_mutex);
-
-	/* setup ports */
-	vusb_port_init(udc, 0);
-	//for (i = 0; i < vhub->max_ports && rc == 0; i++)
-	//	rc = vusb_port_init(vhub, i);
-	//if (rc)
-	//	goto err;
-
 
   udc->transfer = devm_kcalloc(&spi->dev, VUSB_SPI_BUFFER_LENGTH, sizeof(u8), GFP_KERNEL);
   if (!udc->transfer) {
@@ -526,11 +522,6 @@ static int vusb_probe(struct spi_device *spi)
 	msleep_interruptible(100);
 #endif // _DEBUG
 
-
-	udc->is_selfpowered = 1;
-	udc->todo |= UDC_START;
-  udc->softconnect = true;
-
   // char device
   dev_t usrdev;
   alloc_chrdev_region(&usrdev, 0, VUSB_MAX_CHAR_DEVICES, "vusb");
@@ -551,13 +542,23 @@ static int vusb_probe(struct spi_device *spi)
 
   vusb_mpack_buffer(udc, 2, udc->transfer, 512);
 	
-	INIT_WORK(&udc->vusb_irq_wq, vusb_irq_mcu_handler);
-
-
-  udc->irq_work = create_singlethread_workqueue("spihubirq");
+	// worker queue for irqs
+	udc->irq_work_mcu = create_singlethread_workqueue("vusb_irq_mcu");
+	udc->irq_work_data = create_singlethread_workqueue("vusb_irq_data");
+	INIT_WORK(&udc->vusb_irq_wq_mcu, vusb_irq_mcu_handler);
 
   //usb_udc_vbus_handler(&udc->gadget, true);
   //usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
+	/* setup ports */
+	vusb_port_init(udc, 0);
+	//for (i = 0; i < vhub->max_ports && rc == 0; i++)
+	//	rc = vusb_port_init(vhub, i);
+	//if (rc)
+	//	goto err;
+
+	udc->is_selfpowered = 1;
+	udc->todo |= UDC_START;
+	udc->softconnect = true;
 
 	return 0;
 err:
@@ -586,17 +587,21 @@ static int vusb_remove(struct spi_device *spi)
 		}
 	}
 
+	if (udc->irq_work_mcu) {
+		flush_workqueue(udc->irq_work_mcu);
+		destroy_workqueue(udc->irq_work_mcu);
+	}
+	if (udc->irq_work_data) {
+		flush_workqueue(udc->irq_work_data);
+		destroy_workqueue(udc->irq_work_data);
+	}
+
   // remove the char device
   device_destroy(udc->chardev_class, MKDEV(udc->crdev_major, 1));
   class_destroy(udc->chardev_class);
 
   dev_t dev_id = MKDEV(udc->crdev_major, 0);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
-
-	if (udc->irq_work) {
-		flush_workqueue(udc->irq_work);
-		destroy_workqueue(udc->irq_work);
-	}
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");
 
