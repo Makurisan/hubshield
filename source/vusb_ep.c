@@ -350,7 +350,6 @@ static void vusb_ep_status(struct work_struct* work)
 
 }
 
-
 /*
   This function predefines and reserve the endpoint pipes on the mcu
 */
@@ -433,7 +432,6 @@ static void vusb_port_start(struct work_struct* work)
 
 }
 
-
 static void vusb_port_stop(struct work_struct* work)
 {
   struct vusb_port_dev* d = container_of(work, struct vusb_port_dev, wk_stop);
@@ -489,6 +487,17 @@ found_ep:
 
 }
 
+static void vusb_dev_nuke(struct vusb_udc* udc, int status)
+{
+  unsigned int i;
+
+  //for (i = 0; i < VUSB_MAX_EPS; i++) {
+  //  if (udc->ep[i].ep_usb.caps.dir_in) {
+  //    vusb_nuke(&udc->ep[i], status);
+  //  }
+  //}
+}
+
 static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* driver)
 {
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
@@ -499,29 +508,17 @@ static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* d
   spin_lock_irqsave(&udc->lock, flags);
   /* hook up the driver */
   driver->driver.bus = NULL;
-  udc->driver = driver;
+  d->driver = driver;
   d->gadget.speed = USB_SPEED_FULL;
 
   d->gadget.is_selfpowered = udc->is_selfpowered;
   udc->remote_wkp = 0;
   udc->softconnect = true;
-  udc->todo |= UDC_START;
   spin_unlock_irqrestore(&udc->lock, flags);
 
   schedule_work(&d->wk_start);
 
   return 0;
-}
-
-static void vusb_dev_nuke(struct vusb_udc* udc, int status)
-{
-  unsigned int i;
-
-  //for (i = 0; i < VUSB_MAX_EPS; i++) {
-  //  if (udc->ep[i].ep_usb.caps.dir_in) {
-  //    vusb_nuke(&udc->ep[i], status);
-  //  }
-  //}
 }
 
 static int vusb_udc_stop(struct usb_gadget* gadget)
@@ -535,8 +532,8 @@ static int vusb_udc_stop(struct usb_gadget* gadget)
   udc->is_selfpowered = d->gadget.is_selfpowered;
   d->gadget.speed = USB_SPEED_UNKNOWN;
   d->driver = NULL;
+
   udc->softconnect = false;
-  udc->todo |= UDC_START;
   spin_unlock_irqrestore(&udc->lock, flags);
 
   //vusb_dev_nuke(udc, -ESHUTDOWN);

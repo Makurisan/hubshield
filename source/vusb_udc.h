@@ -363,10 +363,6 @@ struct vusb_udc {
   struct vusb_port* ports;
   u32			max_ports;
 
-  //struct vusb_ep ep[VUSB_MAX_EPS];
-
-  struct usb_gadget_driver* driver;
-
   int remote_wkp, is_selfpowered;
   bool softconnect;
 
@@ -374,8 +370,6 @@ struct vusb_udc {
   spinlock_t wq_lock;
 
   bool suspended;
-
-  u32 todo;
 
 };
 

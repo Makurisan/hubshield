@@ -47,7 +47,8 @@ static void vusb_getstatus(struct vusb_ep* ep)
 		status |= (udc->remote_wkp << USB_DEVICE_REMOTE_WAKEUP);
 		break;
 	case USB_RECIP_INTERFACE:
-		if (udc->driver->setup(&d->gadget, &ep->setup) < 0)
+		//UDCVDBG(udc, "** Get status IRQ RESET raised on port:%d\n", d->driver, udc->driver);
+		if (d->driver->setup(&d->gadget, &ep->setup) < 0)
 			goto stall;
 		break;
 	case USB_RECIP_ENDPOINT:
@@ -154,12 +155,10 @@ void vusb_handle_setup(struct vusb_ep* ep)
 			break;
 		return vusb_set_clear_feature(ep);
 	default:
-		UDCVDBG(udc, "Default vusb_handle_setup request: %d\n", ep->setup.bRequest);
+		//UDCVDBG(udc, "Default vusb_handle_setup request: %d\n", ep->setup.bRequest);
 		break;
 	}
-
-  //UDCVDBG(udc, "handle_setup driver: %x\n", udc->driver);
-	if (udc->driver != NULL && udc->driver->setup(&d->gadget, &ep->setup) < 0) {
+	if (d->driver != NULL && d->driver->setup(&d->gadget, &ep->setup) < 0) {
     UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, ep->setup.bRequestType, ep->setup.bRequest);
     // prints the setup packet which leads to the error
 		pr_hex_mark_debug((void*)&ep->setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
@@ -324,10 +323,10 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			while (hweight32(portirq)) {
 				u16 port = _bf_ffsl(portirq);
 				struct vusb_port_dev* d = &udc->ports[port - 1].dev;
-				UDCVDBG(udc, "Port IRQ RESET raised on port:%d\n", port);
-				//spin_lock_irqsave(&udc->lock, flags);
-				usb_gadget_udc_reset(&d->gadget, udc->driver);
-				//spin_unlock_irqrestore(&udc->lock, flags);
+				//UDCVDBG(udc, "** MCU handler IRQ RESET raised on port:%p, %p\n", d->driver, udc->driver);
+				// use reset only if gadget is used before
+				if(d->driver)
+					usb_gadget_udc_reset(&d->gadget, d->driver);
 				portirq &= ~BIT(port);
 			}
 		}
@@ -557,7 +556,6 @@ static int vusb_probe(struct spi_device *spi)
 	//	goto err;
 
 	udc->is_selfpowered = 1;
-	udc->todo |= UDC_START;
 	udc->softconnect = true;
 
 	return 0;
