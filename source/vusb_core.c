@@ -546,14 +546,15 @@ static int vusb_probe(struct spi_device *spi)
 	udc->irq_work_data = create_singlethread_workqueue("vusb_irq_data");
 	INIT_WORK(&udc->vusb_irq_wq_mcu, vusb_irq_mcu_handler);
 
-  //usb_udc_vbus_handler(&udc->gadget, true);
-  //usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 	/* setup ports */
 	vusb_port_init(udc, 0);
+	vusb_port_init(udc, 1);
 	//for (i = 0; i < vhub->max_ports && rc == 0; i++)
 	//	rc = vusb_port_init(vhub, i);
 	//if (rc)
 	//	goto err;
+  //usb_udc_vbus_handler(&udc->gadget, true);
+  //usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
 
 	udc->is_selfpowered = 1;
 	udc->softconnect = true;
@@ -581,7 +582,9 @@ static int vusb_remove(struct spi_device *spi)
 	for (i = 0; i < udc->max_ports; i++) {
 		struct vusb_port_dev* d = &udc->ports[i].dev;
 		if (d->registered) {
+			d->registered = false;
 			usb_del_gadget_udc(&d->gadget);
+			device_unregister(d->port_dev);
 		}
 	}
 

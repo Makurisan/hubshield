@@ -10,23 +10,6 @@
  *                               *
  *********************************/
 
-enum vusb_req_code {
-  VUSB_REQ_GET_STATUS = 0,
-  VUSB_REQ_CLEAR_FTR = 1,
-  VUSB_REQ_GET_STATE = 2,
-  VUSB_REQ_SET_FTR = 3,
-  VUSB_REQ_SET_ADDRESS = 5,
-  VUSB_REQ_GET_DESC = 6,
-  VUSB_REQ_SET_DESC = 7,
-  VUSB_REQ_GET_CONFIG = 8,
-  VUSB_REQ_SET_CONFIG = 9,
-  VUSB_REQ_GET_INTERFACE = 10,
-  VUSB_REQ_SET_INTERFACE = 11,
-  VUSB_REQ_SYNCH_FRAME = 12,
-  VUSB_REQ_SET_SEL = 48,
-  VUSB_REQ_ISOCH_DELAY = 49
-};
-
 #define VUSB_SPI_DATRDY_TIMEOUT  800 // ms
 
 #define VUSB_SPI_HEADER		        (1 <<  2)
@@ -46,17 +29,6 @@ enum vusb_req_code {
 #define VUSB_REG_PORT_DETACH  0x08
 #define VUSB_REG_ACK					0x09
 
-#define VUSB_REG_USB				0x10
-#define VUSB_REG_USB_GET_STATUS   	(VUSB_REG_USB + VUSB_REQ_GET_STATUS   )
-#define VUSB_REG_USB_CLEAR_FTR    	(VUSB_REG_USB + VUSB_REQ_CLEAR_FTR    )
-#define VUSB_REG_USB_GET_STATE    	(VUSB_REG_USB + VUSB_REQ_GET_STATE    )
-#define VUSB_REG_USB_SET_FTR      	(VUSB_REG_USB + VUSB_REQ_SET_FTR      )
-#define VUSB_REG_USB_GET_DESC     	(VUSB_REG_USB + VUSB_REQ_GET_DESC     )
-#define VUSB_REG_USB_SET_DESC     	(VUSB_REG_USB + VUSB_REQ_SET_DESC     )
-#define VUSB_REG_USB_GET_CONFIG   	(VUSB_REG_USB + VUSB_REQ_GET_CONFIG   )
-#define VUSB_REG_USB_SET_CONFIG   	(VUSB_REG_USB + VUSB_REQ_SET_CONFIG   )
-#define VUSB_REG_USB_GET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_GET_INTERFACE)
-#define VUSB_REG_USB_SET_INTERFACE	(VUSB_REG_USB + VUSB_REQ_SET_INTERFACE)
 
 #define VUSB_REG_READ_LOCK  0x29
 #define VUSB_REG_PRINTF		  0x30
@@ -206,9 +178,8 @@ enum vusb_req_code {
 #define VUSB_MCU_IRQ_GPIO    0x00
 #define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
 
-#define gadget_to_udc(g)		container_of((g), struct vusb_udc, gadget)
+#define gadget_to_dev(g) container_of(g, struct vusb_port_dev, gadget)
 #define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
-
 
 typedef enum reg_ep_type
 {
@@ -245,12 +216,12 @@ struct vusb_req {
   struct vusb_ep* ep;
 };
 
-// the mcu supports 32 PIPES
-struct vusb_pipe {
-  u8  pipe_idx; // MCU device ID
-  u8  port;
-  struct vusb_ep* ep;
-};
+//// the mcu supports 32 PIPES
+//struct vusb_pipe {
+//  u8  pipe_idx; // MCU device ID
+//  u8  port;
+//  struct vusb_ep* ep;
+//};
 
 struct vusb_ep {
   struct usb_ep ep_usb;
@@ -276,7 +247,7 @@ struct vusb_ep {
 
 struct vusb_port_dev {
 
-  //struct vusb_udc* udc;
+  struct vusb_udc* udc;
 
   /* Device index (zero-based) and name string */
   unsigned int index;

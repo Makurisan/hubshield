@@ -26,9 +26,10 @@
 #include <linux/irq.h>
 #include "vusb_udc.h"
 
+#define wk_data_to_vusb_ep(e) container_of((e), struct work_struct, wk_data)
 #define to_vusb_req(r)	container_of((r), struct vusb_req, usb_req)
 #define to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
-#define wk_data_to_vusb_ep(e) container_of((e), struct work_struct, wk_data)
+
 
 static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 {
@@ -83,8 +84,6 @@ void vusb_nuke(struct vusb_ep* ep, int status)
   struct vusb_req* req, * r;
   unsigned long flags;
 
-  UDCVDBG(ep->udc, "vusb_nuke ep:%s\n", ep->name);
-
   spin_lock_irqsave(&ep->lock, flags);
 
   list_for_each_entry_safe(req, r, &ep->queue, queue) {
@@ -101,7 +100,6 @@ void vusb_nuke(struct vusb_ep* ep, int status)
 static int vusb_ep_disable(struct usb_ep* _ep)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
-  struct vusb_udc* udc = ep->udc;
   unsigned long flags;
 
   vusb_nuke(ep, -ESHUTDOWN);
@@ -143,7 +141,6 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
 {
   struct vusb_req* req = to_vusb_req(_req);
   struct vusb_ep* ep = to_vusb_ep(_ep);
-  struct vusb_udc* udc = ep->udc;
   unsigned long flags;
 
   if (unlikely(!_req || !_req->complete || !_req->buf || !_ep))
@@ -161,7 +158,6 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   pr_hex_mark(buf, length, PRINTF_READ, ep->name);
   spin_unlock_irqrestore(&ep->lock, flags);
 #endif // _DEBUG
-
 
   spin_lock_irqsave(&ep->lock, flags);
   list_add_tail(&req->queue, &ep->queue);
@@ -216,7 +212,7 @@ static const struct usb_endpoint_descriptor ep0_desc = {
 
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
 {
-  struct vusb_port_dev* d = &udc->ports[0/*port*/].dev;
+  struct vusb_port_dev* d = &udc->ports[1/*port*/].dev;
 
   int idx;
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
@@ -487,15 +483,16 @@ found_ep:
 
 }
 
-static void vusb_dev_nuke(struct vusb_udc* udc, int status)
+static void vusb_dev_nuke(struct vusb_port_dev* dev, int status)
 {
-  unsigned int i;
+  unsigned int idx;
 
-  //for (i = 0; i < VUSB_MAX_EPS; i++) {
-  //  if (udc->ep[i].ep_usb.caps.dir_in) {
-  //    vusb_nuke(&udc->ep[i], status);
-  //  }
-  //}
+  for (idx = 1; idx < VUSB_MAX_EPS; idx++) {
+    //if (dev->ep[idx].ep_usb.caps.dir_in)
+      vusb_nuke(&dev->ep[idx], -ECONNRESET);
+  }
+  UDCVDBG(dev->udc, "vusb_nuke port:%d\n", dev->ep[0].port);
+
 }
 
 static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* driver)
@@ -523,36 +520,26 @@ static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* d
 
 static int vusb_udc_stop(struct usb_gadget* gadget)
 {
-  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-  struct vusb_udc* udc = ep->udc;
-  struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
+  struct vusb_ep* ep0 = ep_usb_to_vusb_ep(gadget->ep0);
+  struct vusb_udc* udc = ep0->udc;
+  struct vusb_port_dev* d = &udc->ports[ep0->dev_idx].dev;
   unsigned long flags;
+
+  /* clear all pending requests */
+  vusb_dev_nuke(d, -ESHUTDOWN);
 
   spin_lock_irqsave(&udc->lock, flags);
   udc->is_selfpowered = d->gadget.is_selfpowered;
   d->gadget.speed = USB_SPEED_UNKNOWN;
   d->driver = NULL;
-
   udc->softconnect = false;
   spin_unlock_irqrestore(&udc->lock, flags);
 
-  //vusb_dev_nuke(udc, -ESHUTDOWN);
-  //flush_workqueue(udc->irq_work_mcu);
-  UDCVDBG(udc, "Hub gadget vusb_udc_stop\n");
-
-#define DEBUG
-#ifdef DEBUG
+  /* write port disable to MCU */
   schedule_work(&d->wk_stop);
-#else
-  u8 transfer[24];
-  // set disable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep->port; // port
-  transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-#endif // _DEBUG
 
-  UDCVDBG(udc, "Hub device on port: %d is removed.\n", ep->port);
+  UDCVDBG(udc, "Hub gadget vusb_udc_stop on port: %d\n", ep0->port);
+
   return 0;
 }
 
@@ -566,14 +553,26 @@ static const struct usb_gadget_ops vusb_udc_ops = {
 
 static const char driver_name[] = "vusb-udc";
 
+static void vusb_dev_release(struct device* dev)
+{
+  kfree(dev);
+}
+
 int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
 {
   struct vusb_port_dev* d = &udc->ports[devidx].dev;
   struct device* parent = &udc->spi->dev;
   int rc;
 
-  d->name = devm_kasprintf(parent, GFP_KERNEL, "port%d", devidx + 1);
+  d->name = devm_kasprintf(parent, GFP_KERNEL, "port%d", devidx);
   d->index = devidx; // as port reference
+  d->udc = udc;
+  d->port_dev = kzalloc(sizeof(struct device), GFP_KERNEL);
+  device_initialize(d->port_dev);
+  d->port_dev->release = vusb_dev_release;
+  d->port_dev->parent = parent;
+  dev_set_name(d->port_dev, "%s:p%d", dev_name(parent), devidx + 1);
+  rc = device_add(d->port_dev);
 
   INIT_LIST_HEAD(&d->gadget.ep_list);
 
@@ -597,7 +596,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     ep->dev_idx = devidx; // device idx on linux
     ep->udc = udc;
 // todo: temp....
-    ep->port = 2; // port on the mcu
+    ep->port = devidx + 1; // port on the mcu
     ep->halted = 0;
     ep->ep_usb.name = ep->name;
     ep->ep_usb.ops = &vusb_ep_ops;
@@ -641,15 +640,14 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
 
     list_add_tail(&ep->ep_usb.ep_list, &d->gadget.ep_list);
   }
-  dev_info(&udc->spi->dev, "UDC gadget preparing to add\n");
   // gadget must be the last activated in the probe
-  rc = usb_add_gadget_udc(&udc->spi->dev, &d->gadget);
+  rc = usb_add_gadget_udc(d->port_dev, &d->gadget);
   if (rc) {
     dev_err(&udc->spi->dev, "UDC gadget could not be added\n");
     return rc;
   }
   d->registered = true;
-
+  dev_info(&udc->spi->dev, "UDC gadget added with name: %s\n", dev_name(d->port_dev));
   return 0;
 
 }
