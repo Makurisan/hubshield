@@ -34,7 +34,6 @@
 
 #include "mpack.h"
 
-
 /* mpack/mpack-platform.c.c */
 
 

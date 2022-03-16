@@ -109,13 +109,14 @@ static int _vusb_read_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 lengt
   struct spi_transfer t;
   struct spi_message msg;
   int rc = -7;
+  spi_cmd_t* cmd;
 
  // lock read mutex
   memset(&t, 0, sizeof(t));
   spi_message_init(&msg);
 
  // prepare the transmit buffer
-  spi_cmd_t* cmd = (spi_cmd_t*)udc->transfer;
+  cmd = (spi_cmd_t*)udc->transfer;
   cmd->length = length;
   cmd->reg.val = reg;
   memmove(cmd->data, buffer, length);
@@ -269,12 +270,12 @@ static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 leng
 {
   struct spi_transfer t;
   struct spi_message msg;
-
-  memset(&t, 0, sizeof(t));
-  spi_message_init(&msg);
+  int status;
 
   // header reg, length, crc
   spi_cmd_t* cmd = (spi_cmd_t*)udc->spiwritebuffer;
+
+  memset(&t, 0, sizeof(t));
 
   // overlapping copy and length automatically checked
   memmove(cmd->data, buffer, length);
@@ -291,10 +292,11 @@ static int _vusb_write_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 leng
   t.cs_change_delay.unit = 0;
   t.cs_change_delay.value = 100;
 
+  spi_message_init(&msg);
   //pr_hex_mark(udc->spitransfer, t.len, PRINTF_WRITE, NULL);
   spi_message_add_tail(&t, &msg);
 
-  int status = spi_sync_locked(udc->spi, &msg);
+  status = spi_sync_locked(udc->spi, &msg);
   if (status) {
     UDCVDBG(udc, "--> Mcu spi write error: %d\n", status);
   }

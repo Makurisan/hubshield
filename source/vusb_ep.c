@@ -34,7 +34,6 @@
 static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
-  struct vusb_udc* udc = ep->udc;
   unsigned long flags;
 
   spin_lock_irqsave(&ep->lock, flags);
@@ -54,7 +53,6 @@ static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 static int vusb_ep_enable(struct usb_ep* _ep, const struct usb_endpoint_descriptor* desc)
 {
   struct vusb_ep* ep = to_vusb_ep(_ep);
-  struct vusb_udc* udc = ep->udc;
 
   unsigned int maxp = usb_endpoint_maxp(desc);
   unsigned long flags;
@@ -213,8 +211,8 @@ static const struct usb_endpoint_descriptor ep0_desc = {
 struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
 {
   struct vusb_port_dev* d = &udc->ports[1/*port*/].dev;
-
   int idx;
+
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &d->ep[idx];
     if (ep->idx == ep_idx) {
@@ -230,10 +228,12 @@ static void vusb_ep_irq_data(struct work_struct* work)
 
   if (ep->dir == USB_DIR_BOTH) {
     u8 transfer[24];
+    spi_cmd_t* cmd;
+
     transfer[0] = REG_PIPE_SPFIFO; // setup register
     transfer[1] = ep->idx; // octopus pipe
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, sizeof(struct usb_ctrlrequest));
-    spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+    cmd = (spi_cmd_t*)transfer;
     memmove(&ep->setup, cmd->data, sizeof(struct usb_ctrlrequest));
     // pr_hex_mark((void*)&setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name);
     //UDCVDBG(ep->udc, "vusb_ep_irq_data - ctrl, name: %s, pipe: %d, cnt: %d\n", ep->name, ep->idx, ep->maxpacket);
@@ -252,7 +252,6 @@ static void vusb_ep_irq_data(struct work_struct* work)
 static void vusb_ep_data(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_data);
-  unsigned long flags;
 
   if (ep->dir == USB_DIR_BOTH) {
     // process all the control data from the list
@@ -272,8 +271,8 @@ static void vusb_ep_data(struct work_struct* work)
 // called over worker from enable/disable ....
 static void vusb_ep_status(struct work_struct* work)
 {
-  unsigned long flags;
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_status);
+  unsigned long flags;
   u8 transfer[24];
 
   if (ep->todo & ENABLE_EP) {
@@ -349,7 +348,7 @@ static void vusb_ep_status(struct work_struct* work)
 /*
   This function predefines and reserve the endpoint pipes on the mcu
 */
-static void vusb_configure_pipe(struct work_struct* work)
+static void vusb_match_pipe(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
   struct vusb_udc* udc = ep->udc;
@@ -447,7 +446,6 @@ static void vusb_port_stop(struct work_struct* work)
 static int vusb_wakeup(struct usb_gadget* gadget)
 {
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-  unsigned long flags;
   int ret = -EINVAL;
   dev_info(&ep->udc->spi->dev, "Hub gadget vusb_wakeup.\n");
   return ret;
@@ -474,7 +472,7 @@ found_ep:
 
   // schedule the ep
   ep = ep_usb_to_vusb_ep(_ep);
-  INIT_WORK(&ep->wk_udc_work, vusb_configure_pipe);
+  INIT_WORK(&ep->wk_udc_work, vusb_match_pipe);
   schedule_work(&ep->wk_udc_work);
 
   //UDCVDBG(ep->udc, "Hub vusb_match_ep ep0:%s\n", ep->name);
@@ -562,7 +560,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
 {
   struct vusb_port_dev* d = &udc->ports[devidx].dev;
   struct device* parent = &udc->spi->dev;
-  int rc;
+  int rc, idx;
 
   d->name = devm_kasprintf(parent, GFP_KERNEL, "port%d", devidx);
   d->index = devidx; // as port reference
@@ -587,7 +585,6 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
   INIT_WORK(&d->wk_start, vusb_port_start);
   INIT_WORK(&d->wk_stop, vusb_port_stop);
 
-  int idx;
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &d->ep[idx];
 

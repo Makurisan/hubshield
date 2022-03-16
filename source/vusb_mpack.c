@@ -31,21 +31,18 @@ int vusb_mpack_buffer(struct vusb_udc* udc, u8 reg, u8* buffer, u16 length)
   int16_t hResult = 0;
 
   mpack_reader_t reader;
-  mpack_tree_t  tree = { 0 };
+  //mpack_tree_t  tree = { 0 };
   size_t _length = 12;
-  tree;  
+  uint32_t count = 0;
 
 #define OCTOPUS_MAX_SEND_ELEMENTS 5
 
   mpack_reader_init_data(&reader, buffer, _length);
-  uint32_t count;
   if (!mpack_expect_map_max_or_nil(&reader, OCTOPUS_MAX_SEND_ELEMENTS, &count)) {
     mpack_reader_destroy(&reader);
     return hResult;
   }
   mpack_reader_destroy(&reader);
-
-
   return hResult;
 }
 

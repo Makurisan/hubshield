@@ -38,7 +38,6 @@ static void vusb_getstatus(struct vusb_ep* ep)
 	u16 status = 0;
 	struct vusb_udc* udc = ep->udc;
 	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
-	struct vusb_ep* _ep;
 
 	switch (ep->setup.bRequestType & USB_RECIP_MASK) {
 	case USB_RECIP_DEVICE:
@@ -193,6 +192,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 {
 	struct vusb_req *req;
 	int done, length, psz;
+	spi_cmd_t* cmd;
 	void *buf;
 
 	if (list_empty(&ep->queue))
@@ -221,7 +221,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
       vusb_read_buffer(udc, VUSB_REG_MAP_PIPE_GET, udc->spitransfer, length + 2 * sizeof(u8));
-      spi_cmd_t* cmd = (spi_cmd_t*)udc->spitransfer;
+      cmd = (spi_cmd_t*)udc->spitransfer;
       prefetchw(buf);
       memmove(buf, cmd->data, length); // mcu pipe index
       //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
@@ -239,16 +239,15 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 
 	} 
   if (ep->dir == USB_DIR_OUT) {
-
-    //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+    u8 transfer[80];
+   //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
     length = min(length, psz);
 
-    u8 transfer[80];
     // OUT data from the mcu...
     transfer[0] = REG_PIPE_FIFO; // write&read register
     transfer[1] = ep->idx; // pipe
     vusb_read_buffer(ep->udc, VUSB_REG_MAP_PIPE_GET, transfer, 1 + 2 * sizeof(u8));
-    spi_cmd_t* cmd = (spi_cmd_t*)transfer;
+    cmd = (spi_cmd_t*)transfer;
 		length = cmd->length; 
     //UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
 		prefetchw(buf);
@@ -303,18 +302,18 @@ xfer_done:
 
 static void vusb_irq_mcu_handler(struct work_struct* work)
 {
-	unsigned long flags;
+	u8 transfer[64];
 	struct vusb_udc* udc = container_of(work, struct vusb_udc, vusb_irq_wq_mcu);
-
 	//UDCVDBG(udc, "List pointer:%p, :%p, :%p\n", &work->entry, work->entry.next, work->entry.prev);
 
-	u8 transfer[64];
-	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
 
+	if (vusb_read_buffer(udc, VUSB_REG_IRQ_GET, transfer, REG_IRQ_ELEMENTS)) {
+		u8 portirq, usbirq;
+		u32 pipeirq;
 		vusb_req_map_t irq_map;
-		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
 		
-		u8 portirq = irq_map.PRTIRQ & irq_map.PRTIEN;
+		memmove(&irq_map, transfer + VUSB_SPI_HEADER, REG_IRQ_ELEMENTS);
+		portirq = irq_map.PRTIRQ & irq_map.PRTIEN;
 		// port handling
 		if (portirq) {
 			transfer[0] = REG_PRTIRQ;
@@ -334,7 +333,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 	// pipe handling
 		irq_map.PIPIEN = htonl(irq_map.PIPIEN);
 		irq_map.PIPIRQ = htonl(irq_map.PIPIRQ);
-		u32 pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
+		pipeirq = irq_map.PIPIEN & irq_map.PIPIRQ;
 		if (pipeirq) {
 			// clear pipeirq flags
 			transfer[0] = REG_PIPEIRQ;
@@ -352,7 +351,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 			}
 		}
 
-		u8 usbirq = irq_map.USBIRQ & irq_map.USBIEN;
+		usbirq = irq_map.USBIRQ & irq_map.USBIEN;
 		if (usbirq & SRESIRQ) {
 			UDCVDBG(udc, "USB-Reset start\n");
 			transfer[0] = REG_USBIRQ;
@@ -395,7 +394,6 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   struct irq_data* data = irq_desc_get_irq_data(desc);
   if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
   {
-    unsigned long flags;
     struct irq_chip* chip = irq_desc_get_chip(desc);
     if (chip && udc->softconnect && list_empty(&udc->vusb_irq_wq_mcu.entry))
     {
@@ -412,8 +410,8 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
 static int vusb_probe(struct spi_device *spi)
 {
 	struct vusb_udc *udc;
-	int rc = 0;
-	u8 reg[8];
+	dev_t usrdev;
+	int rc = 0, i;
 
   const struct device_node* np = spi->dev.of_node;
 
@@ -510,7 +508,7 @@ static int vusb_probe(struct spi_device *spi)
 #define GPIO_RESET_PIN 24
   /* GPIO for mcu chip reset */
   udc->mcu_gpreset = devm_gpiod_get(&udc->spi->dev, "reset", GPIOD_OUT_HIGH_OPEN_DRAIN);
-  dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%x\n", udc->mcu_gpreset);
+  dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%p\n", udc->mcu_gpreset);
   gpiod_set_value(udc->mcu_gpreset, 1);
 #endif
 
@@ -522,7 +520,6 @@ static int vusb_probe(struct spi_device *spi)
 #endif // _DEBUG
 
   // char device
-  dev_t usrdev;
   alloc_chrdev_region(&usrdev, 0, VUSB_MAX_CHAR_DEVICES, "vusb");
   udc->crdev_major = MAJOR(usrdev);
   cdev_init(&udc->cdev, &vusb_ops);
@@ -546,6 +543,12 @@ static int vusb_probe(struct spi_device *spi)
 	udc->irq_work_data = create_singlethread_workqueue("vusb_irq_data");
 	INIT_WORK(&udc->vusb_irq_wq_mcu, vusb_irq_mcu_handler);
 
+	/* int the mcu pipes list */
+	for (i = 0; i < VUSB_MAX_PIPES; i++) {
+		udc->pipes[i].used = false;
+		udc->pipes[i].enabled = false;
+	}
+
 	/* setup ports */
 	vusb_port_init(udc, 0);
 	vusb_port_init(udc, 1);
@@ -568,8 +571,9 @@ err:
 
 static int vusb_remove(struct spi_device *spi)
 {
+	dev_t dev_id;
+	u8 i;
 	struct vusb_udc *udc = spi_get_drvdata(spi);
-	unsigned long flags;
 
   dev_info(&spi->dev, "Removing vusbhub\n");
 
@@ -578,7 +582,6 @@ static int vusb_remove(struct spi_device *spi)
 
   cdev_del(&udc->cdev);
 
-	u8 i;
 	for (i = 0; i < udc->max_ports; i++) {
 		struct vusb_port_dev* d = &udc->ports[i].dev;
 		if (d->registered) {
@@ -601,7 +604,7 @@ static int vusb_remove(struct spi_device *spi)
   device_destroy(udc->chardev_class, MKDEV(udc->crdev_major, 1));
   class_destroy(udc->chardev_class);
 
-  dev_t dev_id = MKDEV(udc->crdev_major, 0);
+  dev_id = MKDEV(udc->crdev_major, 0);
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");

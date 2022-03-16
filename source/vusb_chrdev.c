@@ -32,10 +32,8 @@
 
 #define isdigit(c)	('0' <= (c) && (c) <= '9')
 
-static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg);
 static ssize_t vusb_chrdev_read(struct file* file, char __user* buf, size_t count, loff_t* offset);
 static int vusb_chrdev_open(struct inode* inode, struct file* file);
-static int vusb_release(struct inode* inode, struct file* file);
 static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size_t count, loff_t* offset);
 
 const struct file_operations vusb_ops = {
@@ -78,17 +76,6 @@ static int vusb_chrdev_open(struct inode* inode, struct file* file)
   return 0;
 }
 
-static int vusb_release(struct inode* inode, struct file* file)
-{
-  return 0;
-}
-
-static long vusb_ioctl(struct file* file, unsigned int cmd, unsigned long arg)
-{
-  printk("vusb: Device ioctl");
-  return 0;
-}
-
 static ssize_t vusb_chrdev_read(struct file* file, char __user* buf, size_t count, loff_t* offset)
 {
   printk("vusb: Device read");
@@ -99,14 +86,14 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
 {
   struct vusb_udc* udc;
   u8 transfer[24];
+  int ncopied;
+  int i, j, rc;
+  const int maxdatalen = 120;
 
-  udc = file->private_data;
-  const size_t maxdatalen = 120;
   uint8_t *data = kmalloc(maxdatalen, GFP_KERNEL);
+  udc = file->private_data;
   memset(data, 0, maxdatalen);
-  size_t ncopied;
   ncopied = copy_from_user(data, buf, maxdatalen);
-  size_t i, j;
   for (i=0; i < count; i++) {
     for (j = 0; j < (sizeof(vusb_send_tab) / sizeof(vusb_send_t)); j++) {
       if (data[i] == 'x') {
@@ -121,7 +108,7 @@ static ssize_t vusb_chrdev_write(struct file* file, const char __user* buf, size
         if (vusb_send_tab[j].length > 1) {
           transfer[1] = '1';
           if (isdigit(data[i + 1])) {
-            kstrtou8(&data[i + 1], 10, &transfer[1]);
+            rc = kstrtou8(&data[i + 1], 10, &transfer[1]);
           }
         }
         vusb_write_buffer(udc, vusb_send_tab[j].cmd, transfer, vusb_send_tab[j].length);

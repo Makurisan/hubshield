@@ -73,9 +73,8 @@
 
 // register map PORT on the mcu
 
-#define REG_MAP_PORT 2	
 #define PORT_REG_TYPE			 0   // uint8
-#define PORT_REG_ENABLED		 1
+#define PORT_REG_ENABLED	 1
 #define PORT_REG_ADDRESS	 2   // uint8
 #define PORT_REG_STATUS1 	 3   // uint16
 #define PORT_REG_STATUS2 	 4   // uint16
@@ -141,15 +140,6 @@
 #define REG_PIPIEN4	11
 #define REG_PIPIEN REG_PIPIEN4 // all 32 bits
 
-//#define REG_PIPIEN_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIEN4])
-//#define REG_PIPIRQ_REG __builtin_bswap32(*(uint32_t*)&_spi_reg_data.vusb[REG_PIPIRQ4])
-
-#define REG_SPIMOD	15 // Edge mode: rising/falling; low, high
-#define REG_PORTS 	16 // count of ports
-#define REG_PIPES 	17 // count of pipes
-#define REG_TDS   	18 // count of tds
-
-
 #define VUSB_MAX_EPS		8
 #define VUSB_EP_MAX_PACKET_LIMIT	64 /* Same for all Endpoints */
 #define VUSB_EPNAME_SIZE		16  /* Buffer size for endpoint name */
@@ -172,14 +162,14 @@
 
 #define CRC8_TABLE_SIZE   256
 #define VUSB_MAX_CHAR_DEVICES 3
+#define VUSB_MAX_PIPES 32
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
-#define VUSB_MCU_IRQ_GPIO    0x00
-#define VUSB_MCU_EP_ENABLE   0x03 // enable the EP on the mcu at the specified port
-
 #define gadget_to_dev(g) container_of(g, struct vusb_port_dev, gadget)
 #define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
+
+
 
 typedef enum reg_ep_type
 {
@@ -216,12 +206,13 @@ struct vusb_req {
   struct vusb_ep* ep;
 };
 
-//// the mcu supports 32 PIPES
-//struct vusb_pipe {
-//  u8  pipe_idx; // MCU device ID
-//  u8  port;
-//  struct vusb_ep* ep;
-//};
+// the mcu supports 32 PIPES
+struct vusb_pipe {
+  u8  used, enabled;
+  u8  pipe_idx; // MCU device ID
+  unsigned int d_idx;
+  struct vusb_ep* ep;
+};
 
 struct vusb_ep {
   struct usb_ep ep_usb;
@@ -314,6 +305,9 @@ struct vusb_udc {
   struct work_struct	vusb_irq_wq_mcu;
   struct workqueue_struct* irq_work_data;
   struct workqueue_struct* irq_work_mcu;
+
+  /* MCU Pipe list */
+  struct vusb_pipe pipes[VUSB_MAX_PIPES];
 
   /* GPIO SPI IRQs */
   struct gpio_desc* mcu_gpreset;

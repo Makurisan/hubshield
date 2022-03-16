@@ -38,16 +38,14 @@ void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, 
   char hexbyte[64];
   char headbyte[30];
   char hexline[512];
-
-  memset(hexbyte, 0, sizeof(hexbyte));
-  memset(hexline, 0, sizeof(hexline));
+  int i, k;
 
   u16 length = *(u16*)&mem[2];
-
-  int i, k = 0;
+  memset(hexbyte, 0, sizeof(hexbyte));
+  memset(hexline, 0, sizeof(hexline));
   count = count > 500?64:count;
 
-  for (i = 0; i < count /*&& count < sizeof(hexline)*/; i++)
+  for (i = 0, k = 0; i < count /*&& count < sizeof(hexline)*/; i++)
   {
     if (i == 3) {
       //  sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
@@ -73,7 +71,7 @@ void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, 
     strcat(hexline, hexbyte);
 
     // print line every 16 bytes or if this is the last for-loop
-    if (((i + 1) % 24 == 0) && (i != 0) || (i + 1 == count)) {
+    if (((i + 1) % 24 == 0) && ((i != 0) || (i + 1 == count))) {
       k++;
       switch (mark) {
       case PRINTF_READ:
