@@ -451,12 +451,12 @@ static int vusb_wakeup(struct usb_gadget* gadget)
   return ret;
 }
 
-static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
-  struct usb_endpoint_descriptor* desc,
+static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,  struct usb_endpoint_descriptor* desc,
   struct usb_ss_ep_comp_descriptor* ep_comp)
 {
   struct usb_ep* _ep;
   struct vusb_ep* ep;
+  struct vusb_port_dev* dev = gadget_to_dev(gadget);
 
   //UDCVDBG(udc, "Hub vusb_match_ep \n");
 
@@ -470,12 +470,14 @@ static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,
 
 found_ep:
 
-  // schedule the ep
   ep = ep_usb_to_vusb_ep(_ep);
+  
+  UDCVDBG(dev->udc, "Hub vusb_match_ep on port: %d\n", ep->port);
+
+  // schedule the ep
   INIT_WORK(&ep->wk_udc_work, vusb_match_pipe);
   schedule_work(&ep->wk_udc_work);
 
-  //UDCVDBG(ep->udc, "Hub vusb_match_ep ep0:%s\n", ep->name);
 
   return _ep;
 

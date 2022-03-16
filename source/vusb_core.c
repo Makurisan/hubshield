@@ -508,7 +508,7 @@ static int vusb_probe(struct spi_device *spi)
 #define GPIO_RESET_PIN 24
   /* GPIO for mcu chip reset */
   udc->mcu_gpreset = devm_gpiod_get(&udc->spi->dev, "reset", GPIOD_OUT_HIGH_OPEN_DRAIN);
-  dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%p\n", udc->mcu_gpreset);
+  //dev_info(&udc->spi->dev, "Reset gpio is defined as gpio:%p\n", udc->mcu_gpreset);
   gpiod_set_value(udc->mcu_gpreset, 1);
 #endif
 
