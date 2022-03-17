@@ -182,7 +182,7 @@ static int vusb_ep_queue(struct usb_ep* _ep, struct usb_request* _req, gfp_t ign
   list_add_tail(&req->queue, &ep->queue);
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  if (ep->udc->connected) {
+  if (ep->dev->connected) {
     schedule_work(&ep->wk_ep_data);
   }
   //UDCVDBG(ep->udc, "vusb_ep_queue, name: %s\n", ep->name);
@@ -535,6 +535,7 @@ static void vusb_port_start(struct work_struct* work)
   // enable the pipe
   pipe = vusb_get_pipe(udc, ep0->idx);
   pipe->enabled = true;
+  dev->connected = true;
 
   //UDCVDBG(udc, "Hub port %d with ctrl/pipe: %s is now in remote stage and enabled", ep0->port, ep0->name);
   UDCVDBG(udc, "Hub gadget vusb_udc_start with pipe/id: %d, name: %s\n", ep0->idx, ep0->name);
@@ -556,7 +557,6 @@ static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* d
 
   dev->gadget.is_selfpowered = udc->is_selfpowered;
   udc->remote_wkp = 0;
-  udc->connected = true;
   spin_unlock_irqrestore(&udc->lock, flags);
 
   schedule_work(&dev->wk_start);
@@ -572,8 +572,6 @@ static void vusb_port_stop(struct vusb_ep* _ep)
   struct vusb_port_dev* dev = _ep->dev;
   struct vusb_ep* ep0 = &dev->ep[0]; // control pipe of the dev
   u8 transfer[24];
-
-  UDCVDBG(dev->udc, "Port %d will be detached %p", ep0->port, ep0->dev);
 
   vusb_clear_mcu_pipe(ep0->dev);
 
@@ -594,6 +592,7 @@ static void vusb_port_stop(struct vusb_ep* _ep)
       vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
     }
   }
+  UDCVDBG(dev->udc, "Port %d and all epn are detached.", ep0->port);
 
 }
 
@@ -612,8 +611,9 @@ static int vusb_udc_stop(struct usb_gadget* gadget)
   udc->is_selfpowered = dev->gadget.is_selfpowered;
   dev->gadget.speed = USB_SPEED_UNKNOWN;
   dev->driver = NULL;
-  udc->connected = false;
   spin_unlock_irqrestore(&udc->lock, flags);
+  // beware of this
+  dev->connected = false;
 
   /* write port disable to MCU */
   //schedule_work(&dev->wk_stop);

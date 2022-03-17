@@ -558,6 +558,7 @@ static int vusb_probe(struct spi_device *spi)
 		goto err;
 
 	udc->is_selfpowered = 1;
+	// driver is ready to use
 	udc->connected = true;
 
 	return 0;

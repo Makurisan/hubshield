@@ -250,7 +250,8 @@ struct vusb_port_dev {
   /* Link to gadget core */
   struct usb_gadget		gadget;
   struct usb_gadget_driver* driver;
-  bool				registered : 1;
+  bool	registered : 1;
+  bool	connected : 1;
 
   /* Endpoint structures */
   struct vusb_ep ep[VUSB_MAX_EPS];
