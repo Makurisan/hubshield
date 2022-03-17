@@ -112,7 +112,7 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   ctrl_pipe = vusb_get_pipe(ep->udc, to_ctrl_ep(ep));
   if (ctrl_pipe && ctrl_pipe->enabled) {
     schedule_work(&ep->wk_status);
-    UDCVDBG(ep->udc, "vusb_ep_disable %s\n", ep->name);
+    //UDCVDBG(ep->udc, "vusb_ep_disable %s\n", ep->name);
   }
 
   return 0;
@@ -624,7 +624,6 @@ static int vusb_udc_stop(struct usb_gadget* gadget)
 
   /* write port disable to MCU */
   schedule_work(&dev->wk_stop);
-  //vusb_port_stop(ep0);
   return 0;
 }
 
