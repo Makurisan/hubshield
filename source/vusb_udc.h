@@ -163,13 +163,13 @@
 #define CRC8_TABLE_SIZE   256
 #define VUSB_MAX_CHAR_DEVICES 3
 #define VUSB_MAX_PIPES 32
+#define VUSB_MCU_PIPE_ID 2
 
 #define UDCVDBG(u, fmt...)	dev_info(&(u)->spi->dev, fmt)
 
 #define gadget_to_dev(g) container_of(g, struct vusb_port_dev, gadget)
 #define ep_usb_to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
-
-
+#define pipe_id_to_index(id) id-VUSB_MCU_PIPE_ID
 
 typedef enum reg_ep_type
 {
@@ -355,5 +355,6 @@ void vusb_handle_setup(struct vusb_ep* ep);
 void vusb_work_handler(struct work_struct* work);
 void vusb_work_irqhandler(struct work_struct* work);
 int vusb_do_data(struct vusb_udc* udc, struct vusb_ep* ep);
+struct vusb_pipe* vusb_get_pipe(struct vusb_udc* udc, u8 pipe_id);
 
 #endif /* __VUSB_UDC_H */

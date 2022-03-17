@@ -344,7 +344,7 @@ static void vusb_irq_mcu_handler(struct work_struct* work)
 				u32 irq = _bf_ffsl(pipeirq);
 				struct vusb_ep* ep = vusb_get_ep(udc, irq);
 				// schedule a setup packet
-				if (ep && list_empty(&ep->wk_irq_data.entry)) {
+				if (ep != NULL && list_empty(&ep->wk_irq_data.entry)) {
 					queue_work(udc->irq_work_data, &ep->wk_irq_data);
 				}
 				pipeirq &= ~BIT(irq);
@@ -545,19 +545,17 @@ static int vusb_probe(struct spi_device *spi)
 
 	/* int the mcu pipes list */
 	for (i = 0; i < VUSB_MAX_PIPES; i++) {
+		udc->pipes[i].ep = NULL;
 		udc->pipes[i].used = false;
 		udc->pipes[i].enabled = false;
+		udc->pipes[i].pipe_idx = i + VUSB_MCU_PIPE_ID; // start pipe index is + 2 ...
 	}
 
 	/* setup ports */
-	vusb_port_init(udc, 0);
-	vusb_port_init(udc, 1);
-	//for (i = 0; i < vhub->max_ports && rc == 0; i++)
-	//	rc = vusb_port_init(vhub, i);
-	//if (rc)
-	//	goto err;
-  //usb_udc_vbus_handler(&udc->gadget, true);
-  //usb_gadget_set_state(&udc->gadget, USB_STATE_POWERED);
+	for (i = 0; i < udc->max_ports && rc == 0; i++)
+		rc = vusb_port_init(udc, i);
+	if (rc)
+		goto err;
 
 	udc->is_selfpowered = 1;
 	udc->softconnect = true;

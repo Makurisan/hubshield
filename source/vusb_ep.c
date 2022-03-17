@@ -208,20 +208,6 @@ static const struct usb_endpoint_descriptor ep0_desc = {
   .wMaxPacketSize = cpu_to_le16(VUSB_EP_MAX_PACKET_LIMIT),
 };
 
-struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 ep_idx)
-{
-  struct vusb_port_dev* d = &udc->ports[1/*port*/].dev;
-  int idx;
-
-  for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
-    struct vusb_ep* ep = &d->ep[idx];
-    if (ep->idx == ep_idx) {
-      return ep;
-    }
-  }
-  return 0;
-}
-
 static void vusb_ep_irq_data(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_irq_data);
@@ -318,6 +304,12 @@ static void vusb_ep_status(struct work_struct* work)
     transfer[2] = 1;			  // field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
+    // enable the pipe
+    struct vusb_pipe* pipe = vusb_get_pipe(ep->udc, ep->idx);
+    pipe->enabled = true;
+
+    UDCVDBG(ep->udc, "vusb_ep_state enable request, name: %s, pipe/id: %d\n", ep->name, ep->idx);
+
   } else
     if (ep->todo & DISABLE) {
       UDCVDBG(ep->udc, "vusb_ep_state disable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
@@ -339,10 +331,66 @@ static void vusb_ep_status(struct work_struct* work)
     UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s, pipe:%d\n", ep->name, ep->idx);
   }
   else {
-    UDCVDBG(ep->udc, "vusb_ep_state '!STALL' request, name: %s, pipe: %d\n", ep->name, ep->idx);
+    UDCVDBG(ep->udc, "vusb_ep_state 'ERROR' request, name: %s, pipe: %d\n", ep->name, ep->idx);
     ep->halted = 0;
   }
 
+}
+
+struct vusb_pipe* vusb_get_pipe(struct vusb_udc* udc, u8 pipe_id)
+{
+  return &udc->pipes[pipe_id_to_index(pipe_id)];
+}
+
+struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 pipe_id)
+{
+  struct vusb_ep* ep = NULL;
+  struct vusb_pipe* pipe = vusb_get_pipe(udc, pipe_id);
+
+  // we can't use pipe id directly as index 
+  if (pipe && pipe->used) {
+    ep = pipe->ep;
+  } 
+  if (!ep) {
+    UDCVDBG(udc, "*** FATAL error vusb_get_ep pipe: %d\n", pipe_id);
+  } 
+  return ep;
+}
+
+static void vusb_clear_mcu_pipe(struct vusb_port_dev *dev)
+{
+  int idx;
+
+  for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
+    struct vusb_ep* ep = &dev->ep[idx];
+    struct vusb_pipe* pipe = vusb_get_pipe(dev->udc, ep->idx);
+    if (ep->idx != 0 && pipe) {
+      pipe->used = false;
+      pipe->ep = NULL;
+      pipe->enabled = false;
+      ep->idx = 0;
+    }
+  }
+}
+
+/*
+  Associate a free pipe from the MCU to the ep on the kernel
+*/
+static int vusb_free_mcu_pipe(struct vusb_ep* ep)
+{
+  int idx;
+  if (ep->idx == 0) {
+    for (idx = 0; idx < VUSB_MAX_PIPES; idx++) {
+      struct vusb_pipe* pipe = vusb_get_pipe(ep->udc, idx);
+      if (pipe->used == false) {
+        pipe->used = true;
+        pipe->ep = ep;
+        ep->idx = pipe->pipe_idx;
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /*
@@ -353,6 +401,9 @@ static void vusb_match_pipe(struct work_struct* work)
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_udc_work);
   struct vusb_udc* udc = ep->udc;
   u8 transfer[10];
+
+  // assoc a new pipe from the mcu
+  vusb_free_mcu_pipe(ep);
 
   // set port on control pipe
   transfer[0] = REG_PIPE_PORT; // reg
@@ -376,17 +427,87 @@ static void vusb_match_pipe(struct work_struct* work)
 
 }
 
+static void vusb_port_stop(struct work_struct* work)
+{
+  struct vusb_port_dev* dev = container_of(work, struct vusb_port_dev, wk_stop);
+  struct vusb_ep* ep0 = &dev->ep[0];
+  struct vusb_udc* udc = ep0->udc;
+  //UDCVDBG(udc, "Port %d will be detached", ep->port);
+
+  u8 transfer[24];
+  // set disable on port
+  transfer[0] = PORT_REG_ENABLED; // reg
+  transfer[1] = ep0->port; // port: 2
+  transfer[2] = 0;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+
+  vusb_clear_mcu_pipe(dev);
+}
+
+static int vusb_wakeup(struct usb_gadget* gadget)
+{
+  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
+  int ret = -EINVAL;
+  dev_info(&ep->udc->spi->dev, "Hub gadget vusb_wakeup.\n");
+  return ret;
+}
+
+static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,  struct usb_endpoint_descriptor* desc,
+  struct usb_ss_ep_comp_descriptor* ep_comp)
+{
+  struct usb_ep* _ep;
+  struct vusb_ep* ep;
+  struct vusb_port_dev* dev = gadget_to_dev(gadget);
+
+  //UDCVDBG(udc, "Hub vusb_match_ep \n");
+
+  /* Look at endpoints until an unclaimed one looks usable */
+  list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
+    if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
+      goto found_ep;
+  }
+  /* Fail */
+  return NULL;
+
+found_ep:
+
+  ep = ep_usb_to_vusb_ep(_ep);
+  
+  UDCVDBG(dev->udc, "Hub vusb_match_ep on port: %d, ep/name: %s\n", ep->port, ep->name);
+
+  // schedule the ep
+  INIT_WORK(&ep->wk_udc_work, vusb_match_pipe);
+  schedule_work(&ep->wk_udc_work);
+
+  return _ep;
+
+}
+
+static void vusb_dev_nuke(struct vusb_port_dev* dev, int status)
+{
+  unsigned int idx;
+
+  for (idx = 1; idx < VUSB_MAX_EPS; idx++) {
+    //if (dev->ep[idx].ep_usb.caps.dir_in)
+      vusb_nuke(&dev->ep[idx], -ECONNRESET);
+  }
+  UDCVDBG(dev->udc, "vusb_nuke port:%d\n", dev->ep[0].port);
+
+}
 
 // the function is called with the control pipe of the gadget
 static void vusb_port_start(struct work_struct* work)
 {
   struct vusb_port_dev* d = container_of(work, struct vusb_port_dev, wk_start);
-  struct vusb_ep* ep0 = &d->ep[0];
+  struct vusb_ep* ep0 = &d->ep[0]; // control pipe of the dev
   struct vusb_udc* udc = ep0->udc;
 
   u8 transfer[24];
 
   // control pipe
+
+  // assoc a new pipe from the mcu
+  vusb_free_mcu_pipe(ep0);
 
   // define the maxpacketsize
   transfer[0] = REG_PIPE_MAXPKTS; // reg
@@ -422,76 +543,12 @@ static void vusb_port_start(struct work_struct* work)
   vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
   //UDCVDBG(udc, "  - Pipe: %d on port: %d is enabled name: %s\n", ep0->pipe, ep0->port, ep0->name);
 
+  // enable the pipe
+  struct vusb_pipe* pipe = vusb_get_pipe(ep0->udc, ep0->idx);
+  pipe->enabled = true;
+
   //UDCVDBG(udc, "Hub port %d with ctrl/pipe: %s is now in remote stage and enabled", ep0->port, ep0->name);
-  UDCVDBG(udc, "Hub gadget vusb_udc_start started\n");
-
-}
-
-static void vusb_port_stop(struct work_struct* work)
-{
-  struct vusb_port_dev* d = container_of(work, struct vusb_port_dev, wk_stop);
-  struct vusb_ep* ep0 = &d->ep[0];
-  struct vusb_udc* udc = ep0->udc;
-  //UDCVDBG(udc, "Port %d will be detached", ep->port);
-
-  u8 transfer[24];
-  // set disable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep0->port; // port: 2
-  transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-
-}
-
-static int vusb_wakeup(struct usb_gadget* gadget)
-{
-  struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
-  int ret = -EINVAL;
-  dev_info(&ep->udc->spi->dev, "Hub gadget vusb_wakeup.\n");
-  return ret;
-}
-
-static struct usb_ep* vusb_match_ep(struct usb_gadget* gadget,  struct usb_endpoint_descriptor* desc,
-  struct usb_ss_ep_comp_descriptor* ep_comp)
-{
-  struct usb_ep* _ep;
-  struct vusb_ep* ep;
-  struct vusb_port_dev* dev = gadget_to_dev(gadget);
-
-  //UDCVDBG(udc, "Hub vusb_match_ep \n");
-
-  /* Look at endpoints until an unclaimed one looks usable */
-  list_for_each_entry(_ep, &gadget->ep_list, ep_list) {
-    if (usb_gadget_ep_match_desc(gadget, _ep, desc, ep_comp))
-      goto found_ep;
-  }
-  /* Fail */
-  return NULL;
-
-found_ep:
-
-  ep = ep_usb_to_vusb_ep(_ep);
-  
-  UDCVDBG(dev->udc, "Hub vusb_match_ep on port: %d\n", ep->port);
-
-  // schedule the ep
-  INIT_WORK(&ep->wk_udc_work, vusb_match_pipe);
-  schedule_work(&ep->wk_udc_work);
-
-
-  return _ep;
-
-}
-
-static void vusb_dev_nuke(struct vusb_port_dev* dev, int status)
-{
-  unsigned int idx;
-
-  for (idx = 1; idx < VUSB_MAX_EPS; idx++) {
-    //if (dev->ep[idx].ep_usb.caps.dir_in)
-      vusb_nuke(&dev->ep[idx], -ECONNRESET);
-  }
-  UDCVDBG(dev->udc, "vusb_nuke port:%d\n", dev->ep[0].port);
+  UDCVDBG(udc, "Hub gadget started with pipe/id: %d, name: %s\n", ep0->idx, ep0->name);
 
 }
 
@@ -604,7 +661,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     INIT_WORK(&ep->wk_irq_data, vusb_ep_irq_data);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
     ep->maxpacket = ep->ep_usb.maxpacket;
-    ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
+    //ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
     ep->ep0_dir = 0; // set while reading setup packet
 
     if (idx == 0) { /* For EP0 */
@@ -646,7 +703,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     return rc;
   }
   d->registered = true;
-  dev_info(&udc->spi->dev, "UDC gadget added with name: %s\n", dev_name(d->port_dev));
+  dev_info(&udc->spi->dev, "UDC port gadget added with name: %s\n", dev_name(d->port_dev));
   return 0;
 
 }
