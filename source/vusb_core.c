@@ -395,7 +395,7 @@ static irqreturn_t vusb_mcu_irq(int irq, void* dev_id)
   if (desc && data && desc->irq_data.hwirq == GPIO_LISTEN_IRQ_PIN)
   {
     struct irq_chip* chip = irq_desc_get_chip(desc);
-    if (chip && udc->softconnect && list_empty(&udc->vusb_irq_wq_mcu.entry))
+    if (chip && udc->connected && list_empty(&udc->vusb_irq_wq_mcu.entry))
     {
 			queue_work(udc->irq_work_mcu, &udc->vusb_irq_wq_mcu);
     }
@@ -558,7 +558,7 @@ static int vusb_probe(struct spi_device *spi)
 		goto err;
 
 	udc->is_selfpowered = 1;
-	udc->softconnect = true;
+	udc->connected = true;
 
 	return 0;
 err:
@@ -573,21 +573,13 @@ static int vusb_remove(struct spi_device *spi)
 	u8 i;
 	struct vusb_udc *udc = spi_get_drvdata(spi);
 
-  dev_info(&spi->dev, "Removing vusbhub\n");
+  dev_info(&spi->dev, "Removing vusb hub...\n");
 
   disable_irq(udc->mcu_irq);
   disable_irq(udc->spi_datrdy);
+	udc->connected = false;
 
   cdev_del(&udc->cdev);
-
-	for (i = 0; i < udc->max_ports; i++) {
-		struct vusb_port_dev* dev = &udc->ports[i].dev;
-		if (dev->registered) {
-			dev->registered = false;
-			usb_del_gadget_udc(&dev->gadget);
-			device_unregister(dev->port_dev);
-		}
-	}
 
 	if (udc->irq_work_mcu) {
 		flush_workqueue(udc->irq_work_mcu);
@@ -606,6 +598,16 @@ static int vusb_remove(struct spi_device *spi)
   unregister_chrdev_region(dev_id, VUSB_MAX_CHAR_DEVICES);
 
   dev_info(&spi->dev, "Char device from v-hub removed.\n");
+
+	// remove port devices
+	for (i = 0; i < udc->max_ports; i++) {
+		struct vusb_port_dev* dev = &udc->ports[i].dev;
+		if (dev->registered) {
+			dev->registered = false;
+			usb_del_gadget_udc(&dev->gadget);
+			device_unregister(dev->port_dev);
+		}
+	}
 
 	return 0;
 }

@@ -329,7 +329,7 @@ struct vusb_udc {
   u32			max_ports;
 
   int remote_wkp, is_selfpowered;
-  bool softconnect;
+  bool connected;
 
   spinlock_t lock;
   spinlock_t wq_lock;
