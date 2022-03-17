@@ -219,7 +219,7 @@ struct vusb_ep {
   struct vusb_port_dev* dev;
   struct usb_ep ep_usb;
   struct usb_ctrlrequest setup;   // only relevant for ctrl pipes
-  struct work_struct wk_data;     // ep data handling
+  struct work_struct wk_ep_data;     // ep data handling
   struct work_struct wk_status;   // ep status handling
   struct work_struct wk_irq_data; // mcu pipe
   struct work_struct wk_udc_work; // 
