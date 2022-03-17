@@ -28,6 +28,7 @@
 
 #define to_vusb_req(r)	container_of((r), struct vusb_req, usb_req)
 #define to_vusb_ep(e)	container_of((e), struct vusb_ep, ep_usb)
+#define to_ctrl_ep(ep) ep->dev->ep[0].idx
 
 static int vusb_ep_set_halt(struct usb_ep* _ep, int stall)
 {
@@ -95,6 +96,7 @@ void vusb_nuke(struct vusb_ep* ep, int status)
 
 static int vusb_ep_disable(struct usb_ep* _ep)
 {
+  struct vusb_pipe* ctrl_pipe;
   struct vusb_ep* ep = to_vusb_ep(_ep);
   unsigned long flags;
 
@@ -106,8 +108,12 @@ static int vusb_ep_disable(struct usb_ep* _ep)
   ep->todo |= DISABLE;
   spin_unlock_irqrestore(&ep->lock, flags);
 
-  schedule_work(&ep->wk_status);
-  UDCVDBG(ep->udc, "vusb_ep_disable %s\n", ep->name);
+  // check control pipe and dont call if ctrl isnt enabled
+  ctrl_pipe = vusb_get_pipe(ep->udc, to_ctrl_ep(ep));
+  if (ctrl_pipe && ctrl_pipe->enabled) {
+    schedule_work(&ep->wk_status);
+    UDCVDBG(ep->udc, "vusb_ep_disable %s\n", ep->name);
+  }
 
   return 0;
 }
@@ -233,7 +239,6 @@ static void vusb_ep_irq_data(struct work_struct* work)
 
 }
 
-#define to_ctrl_ep(ep) ep->dev->ep[0].idx
 
 static void vusb_ep_data(struct work_struct* work)
 {
@@ -257,7 +262,7 @@ static void vusb_ep_data(struct work_struct* work)
     }
     return;
   }
-  UDCVDBG(ep->udc, "** Fatal Error vusb_ep_data - USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
+  UDCVDBG(ep->udc, "** Fatal Error vusb_ep_data - USB_DIR_IN, port:%d, ep/name: %s, pipe/id: %d\n", ep->port, ep->name, ep->idx);
 }
 
 // called over worker from enable/disable ....
@@ -266,13 +271,13 @@ static void vusb_ep_status(struct work_struct* work)
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_status);
   unsigned long flags;
   u8 transfer[24];
-  struct vusb_pipe* pipe;
 
-  if (ep->todo & ENABLE_EP) {
+  if (ep->todo & ENABLE) {
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
+    UDCVDBG(ep->udc, "vusb_ep_state 'ENABLE' request, ep: %p\n", ep);
     //UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
     //  ep->name, ep->idx, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
 
@@ -319,8 +324,10 @@ static void vusb_ep_status(struct work_struct* work)
 
   } else
     if (ep->todo & DISABLE) {
-      UDCVDBG(ep->udc, "vusb_ep_state disable name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
+      UDCVDBG(ep->udc, "vusb_ep_state 'DISABLE' name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
         ep->name, ep->idx, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
+
+      ep->todo &= ~ENABLE_EP;
 
       // set the pipe enable
       transfer[0] = REG_PIPE_ENABLED; // reg
@@ -666,6 +673,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     ep->udc = udc;
     ep->dev = dev;
 // todo: temp....
+    ep->todo = 0;
     ep->port = devidx + 1; // port on the mcu
     ep->halted = 0;
     ep->ep_usb.name = ep->name;
