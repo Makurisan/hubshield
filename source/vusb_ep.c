@@ -613,7 +613,7 @@ static int vusb_udc_stop(struct usb_gadget* gadget)
 
   /* clear all pending requests */
   //vusb_dev_nuke(dev, -ESHUTDOWN);
-  UDCVDBG(udc, "Hub gadget vusb_udc_stop on port: %d\n", ep0->port);
+  UDCVDBG(udc, "Hub gadget vusb_udc_stop started on port: %d\n", ep0->port);
 
   spin_lock_irqsave(&udc->lock, flags);
   udc->is_selfpowered = dev->gadget.is_selfpowered;

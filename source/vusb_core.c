@@ -581,11 +581,11 @@ static int vusb_remove(struct spi_device *spi)
   cdev_del(&udc->cdev);
 
 	for (i = 0; i < udc->max_ports; i++) {
-		struct vusb_port_dev* d = &udc->ports[i].dev;
-		if (d->registered) {
-			d->registered = false;
-			usb_del_gadget_udc(&d->gadget);
-			device_unregister(d->port_dev);
+		struct vusb_port_dev* dev = &udc->ports[i].dev;
+		if (dev->registered) {
+			dev->registered = false;
+			usb_del_gadget_udc(&dev->gadget);
+			device_unregister(dev->port_dev);
 		}
 	}
 
