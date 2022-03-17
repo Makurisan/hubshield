@@ -20,8 +20,8 @@
 		target = <&spi0>;
         __overlay__ {
 			/* needed to avoid dtc warning */
-    		#address-cells = <1>;
-			#size-cells = <0>;
+    		#address-cells = <0x1>;
+			#size-cells = <0x0>;
  			status = "okay";
 			vhub: vhub@48 {
 				compatible = "hubshield,v-hub";
@@ -29,14 +29,14 @@
 				pinctrl-names = "default";
 				pinctrl-0 = <&vhub_pins>;
 				interrupt-parent = <&gpio>;
-				interrupts = <5 0 6 0>; /* IRQ_TYPE_EDGE_FALLING */
-				reset-gpio = <&gpio 24 4>; // Bit 0: 1 means active low/ Bit 2:1 means open drain
-				max-ports = <5>; // count of virtual hub ports
-				spi_dtrdy = <6>;  
-				spi_irq = <5>;  
-				endpoints = <15>; // count of hub generic endpoints
+				interrupts = <0x5 0x0 0x6 0x0>; /* IRQ_TYPE_EDGE_FALLING */
+				reset-gpio = <&gpio 0x18 0x4>; // Bit 0: 1 means active low/ Bit 2:1 means open drain
+				max-ports = <0x5>; // count of virtual hub ports
+				spi_dtrdy = <0x6>;  
+				spi_irq = <0x5>;  
+				endpoints = <0xF>; // count of hub generic endpoints
 				gpio-controller;
-				#gpio-cells = <3>;
+				#gpio-cells = <0x3>;
 				spi-max-frequency = <8000000>;
 			};
 		};
