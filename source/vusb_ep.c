@@ -270,14 +270,17 @@ static void vusb_ep_status(struct work_struct* work)
 {
   struct vusb_ep* ep = container_of(work, struct vusb_ep, wk_status);
   unsigned long flags;
-  u8 transfer[24];
+  u8 transfer[48];
+  u32 todo;
 
-  if (ep->todo & ENABLE) {
+  todo = ep->todo & ENABLE_EP;
+
+  if (todo == ENABLE) {
+    struct vusb_pipe* pipe;
     spin_lock_irqsave(&ep->lock, flags);
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
-    UDCVDBG(ep->udc, "vusb_ep_state 'ENABLE' request, ep: %p\n", ep);
     //UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
     //  ep->name, ep->idx, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
 
@@ -304,6 +307,7 @@ static void vusb_ep_status(struct work_struct* work)
     transfer[1] = ep->idx; // pipe num
     transfer[2] = ep->ep_usb.desc->bEndpointAddress;			// field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
     // set the pipe interval
     transfer[0] = REG_PIPE_INTERVAL; // reg
     transfer[1] = ep->idx; // pipe num
@@ -316,33 +320,22 @@ static void vusb_ep_status(struct work_struct* work)
     transfer[2] = 1;			  // field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
+    UDCVDBG(ep->udc, "vusb_ep_state enable request, name: %s, pipe/id: %d\n", ep->name, ep->idx);
     // enable the pipe
     pipe = vusb_get_pipe(ep->udc, ep->idx);
     pipe->enabled = true;
 
-    UDCVDBG(ep->udc, "vusb_ep_state enable request, name: %s, pipe/id: %d\n", ep->name, ep->idx);
 
   } else
-    if (ep->todo & DISABLE) {
-      UDCVDBG(ep->udc, "vusb_ep_state 'DISABLE' name:%s, pipe: %x, attrib:%x, epaddr:%x\n",
-        ep->name, ep->idx, ep->ep_usb.desc->bmAttributes, ep->ep_usb.desc->bEndpointAddress);
+  if (todo == DISABLE) {
+    //ep->todo &= ~ENABLE_EP;
+    // set the pipe disable
+    transfer[0] = REG_PIPE_ENABLED; // reg
+    transfer[1] = ep->idx; // pipe num
+    transfer[2] = 0;			  // field to set
+    vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-      ep->todo &= ~ENABLE_EP;
-
-      // set the pipe enable
-      transfer[0] = REG_PIPE_ENABLED; // reg
-      transfer[1] = ep->idx; // pipe num
-      transfer[2] = 0;			  // field to set
-      vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
-
-    }    
-  else
-  if (ep->todo & STALL_EP) {
-
-    spin_lock_irqsave(&ep->lock, flags);
-    ep->todo &= ~STALL_EP;
-    spin_unlock_irqrestore(&ep->lock, flags);
-    UDCVDBG(ep->udc, "vusb_ep_state 'STALL' request, name: %s, pipe:%d\n", ep->name, ep->idx);
+    UDCVDBG(ep->udc, "vusb_ep_state disable request, name: %s, pipe/id: %d\n", ep->name, ep->idx);
   }
   else {
     UDCVDBG(ep->udc, "vusb_ep_state 'ERROR' request, name: %s, pipe: %d\n", ep->name, ep->idx);
@@ -551,7 +544,7 @@ static void vusb_port_start(struct work_struct* work)
   pipe->enabled = true;
 
   //UDCVDBG(udc, "Hub port %d with ctrl/pipe: %s is now in remote stage and enabled", ep0->port, ep0->name);
-  UDCVDBG(udc, "Hub gadget started with pipe/id: %d, name: %s\n", ep0->idx, ep0->name);
+  UDCVDBG(udc, "Hub gadget vusb_udc_start with pipe/id: %d, name: %s\n", ep0->idx, ep0->name);
 
 }
 
@@ -578,12 +571,15 @@ static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* d
   return 0;
 }
 
-static void vusb_port_stop(struct vusb_ep* ep0)
+//static void vusb_port_stop(struct vusb_ep* ep0)
+static void vusb_port_stop(struct work_struct* work)
 {
-  struct vusb_udc* udc = ep0->udc;
+  int idx;
+  struct vusb_port_dev* dev = container_of(work, struct vusb_port_dev, wk_stop);
+  struct vusb_ep* ep0 = &dev->ep[0]; // control pipe of the dev
   u8 transfer[24];
 
-  UDCVDBG(udc, "Port %d will be detached %p", ep0->port, ep0->dev);
+  UDCVDBG(dev->udc, "Port %d will be detached %p", ep0->port, ep0->dev);
 
   vusb_clear_mcu_pipe(ep0->dev);
 
@@ -591,7 +587,20 @@ static void vusb_port_stop(struct vusb_ep* ep0)
   transfer[0] = PORT_REG_ENABLED; // reg
   transfer[1] = ep0->port; // port: 2
   transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+  vusb_write_buffer(dev->udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+
+  // disable active pipes
+  for (idx = 1; idx < VUSB_MAX_EPS; idx++) {
+    struct vusb_ep* ep = &dev->ep[idx];
+    if (ep->idx) {
+      // set the pipe enable
+      transfer[0] = REG_PIPE_ENABLED; // reg
+      transfer[1] = ep->idx; // pipe num
+      transfer[2] = 0;			  // field to set
+      vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
+
+    }
+  }
 
 }
 
@@ -614,10 +623,8 @@ static int vusb_udc_stop(struct usb_gadget* gadget)
   spin_unlock_irqrestore(&udc->lock, flags);
 
   /* write port disable to MCU */
-  //schedule_work(&dev->wk_stop);
-  vusb_port_stop(ep0);
-
-
+  schedule_work(&dev->wk_stop);
+  //vusb_port_stop(ep0);
   return 0;
 }
 
@@ -663,7 +670,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
   dev->gadget.dev.of_node = udc->spi->dev.of_node;
 
   INIT_WORK(&dev->wk_start, vusb_port_start);
-  //INIT_WORK(&dev->wk_stop, vusb_port_stop);
+  INIT_WORK(&dev->wk_stop, vusb_port_stop);
 
   for (idx = 0; idx < VUSB_MAX_EPS; idx++) {
     struct vusb_ep* ep = &dev->ep[idx];
