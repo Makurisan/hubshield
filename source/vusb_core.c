@@ -37,17 +37,17 @@ static void vusb_getstatus(struct vusb_ep* ep)
 {
 	u16 status = 0;
 	struct vusb_udc* udc = ep->udc;
-	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
+	struct vusb_port_dev* dev = ep->dev;
 
 	switch (ep->setup.bRequestType & USB_RECIP_MASK) {
 	case USB_RECIP_DEVICE:
 		/* Get device status */
-		status = d->gadget.is_selfpowered << USB_DEVICE_SELF_POWERED;
+		status = dev->gadget.is_selfpowered << USB_DEVICE_SELF_POWERED;
 		status |= (udc->remote_wkp << USB_DEVICE_REMOTE_WAKEUP);
 		break;
 	case USB_RECIP_INTERFACE:
 		//UDCVDBG(udc, "** Get status IRQ RESET raised on port:%d\n", d->driver, udc->driver);
-		if (d->driver->setup(&d->gadget, &ep->setup) < 0)
+		if (dev->driver->setup(&dev->gadget, &ep->setup) < 0)
 			goto stall;
 		break;
 	case USB_RECIP_ENDPOINT:
@@ -72,7 +72,7 @@ stall:
 static void vusb_set_clear_feature(struct vusb_ep* ep)
 {
 	struct vusb_udc* udc = ep->udc;
-	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
+	struct vusb_port_dev* dev = ep->dev;
 	struct vusb_ep *_ep;
 
 	int set = ep->setup.bRequest == USB_REQ_SET_FEATURE;
@@ -96,7 +96,7 @@ static void vusb_set_clear_feature(struct vusb_ep* ep)
 			break;
 
 		id = ep->setup.wIndex & USB_ENDPOINT_NUMBER_MASK;
-		_ep = &d->ep[id];
+		_ep = &dev->ep[id];
 
 		spin_lock_irqsave(&_ep->lock, flags);
 		_ep->todo &= ~STALL_EP;
@@ -118,7 +118,7 @@ static void vusb_set_clear_feature(struct vusb_ep* ep)
 void vusb_handle_setup(struct vusb_ep* ep)
 {
 	struct vusb_udc* udc = ep->udc;
-	struct vusb_port_dev* d = &udc->ports[ep->dev_idx].dev;
+	struct vusb_port_dev* dev = ep->dev;
 
 	//ep->setup = setup;
 	//ep->setup.wValue = cpu_to_le16(setup.wValue);
@@ -157,7 +157,7 @@ void vusb_handle_setup(struct vusb_ep* ep)
 		//UDCVDBG(udc, "Default vusb_handle_setup request: %d\n", ep->setup.bRequest);
 		break;
 	}
-	if (d->driver != NULL && d->driver->setup(&d->gadget, &ep->setup) < 0) {
+	if (dev->driver != NULL && dev->driver->setup(&dev->gadget, &ep->setup) < 0) {
     UDCVDBG(udc, "setup error: epname: %s Type: %x Request: %x\n", ep->name, ep->setup.bRequestType, ep->setup.bRequest);
     // prints the setup packet which leads to the error
 		pr_hex_mark_debug((void*)&ep->setup, sizeof(struct usb_ctrlrequest), PRINTF_READ, ep->name, "setup error");
@@ -543,7 +543,7 @@ static int vusb_probe(struct spi_device *spi)
 	udc->irq_work_data = create_singlethread_workqueue("vusb_irq_data");
 	INIT_WORK(&udc->vusb_irq_wq_mcu, vusb_irq_mcu_handler);
 
-	/* int the mcu pipes list */
+	/* we have 32 pipes to use, starting with pipe id 2 */
 	for (i = 0; i < VUSB_MAX_PIPES; i++) {
 		udc->pipes[i].ep = NULL;
 		udc->pipes[i].used = false;

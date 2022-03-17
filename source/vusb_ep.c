@@ -82,6 +82,10 @@ void vusb_nuke(struct vusb_ep* ep, int status)
   struct vusb_req* req, * r;
   unsigned long flags;
 
+  if (ep->idx == 0) {
+    return;
+  }
+
   spin_lock_irqsave(&ep->lock, flags);
 
   list_for_each_entry_safe(req, r, &ep->queue, queue) {
@@ -340,6 +344,7 @@ static void vusb_ep_status(struct work_struct* work)
 
 struct vusb_pipe* vusb_get_pipe(struct vusb_udc* udc, u8 pipe_id)
 {
+  // we can't use pipe id directly as index 
   return &udc->pipes[pipe_id_to_index(pipe_id)];
 }
 
@@ -348,7 +353,6 @@ struct vusb_ep* vusb_get_ep(struct vusb_udc* udc, u8 pipe_id)
   struct vusb_ep* ep = NULL;
   struct vusb_pipe* pipe = vusb_get_pipe(udc, pipe_id);
 
-  // we can't use pipe id directly as index 
   if (pipe && pipe->used) {
     ep = pipe->ep;
   } 
@@ -382,7 +386,7 @@ static int vusb_free_mcu_pipe(struct vusb_ep* ep)
   int idx;
   if (ep->idx == 0) {
     for (idx = 0; idx < VUSB_MAX_PIPES; idx++) {
-      struct vusb_pipe* pipe = vusb_get_pipe(ep->udc, idx);
+      struct vusb_pipe* pipe = &ep->udc->pipes[idx];
       if (pipe->used == false) {
         pipe->used = true;
         pipe->ep = ep;
@@ -426,23 +430,6 @@ static void vusb_match_pipe(struct work_struct* work)
   transfer[2] = 0x40;			// field to set
   vusb_write_buffer(udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-}
-
-static void vusb_port_stop(struct work_struct* work)
-{
-  struct vusb_port_dev* dev = container_of(work, struct vusb_port_dev, wk_stop);
-  struct vusb_ep* ep0 = &dev->ep[0];
-  struct vusb_udc* udc = ep0->udc;
-  //UDCVDBG(udc, "Port %d will be detached", ep->port);
-
-  u8 transfer[24];
-  // set disable on port
-  transfer[0] = PORT_REG_ENABLED; // reg
-  transfer[1] = ep0->port; // port: 2
-  transfer[2] = 0;			// value to set
-  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
-
-  vusb_clear_mcu_pipe(dev);
 }
 
 static int vusb_wakeup(struct usb_gadget* gadget)
@@ -556,11 +543,11 @@ static void vusb_port_start(struct work_struct* work)
 
 static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* driver)
 {
+  unsigned long flags;
   struct vusb_ep* ep = ep_usb_to_vusb_ep(gadget->ep0);
   struct vusb_udc* udc = ep->udc;
-  struct vusb_port_dev* dev = &udc->ports[ep->dev_idx].dev;
+  struct vusb_port_dev* dev = ep->dev;
 
-  unsigned long flags;
   spin_lock_irqsave(&udc->lock, flags);
   /* hook up the driver */
   driver->driver.bus = NULL;
@@ -577,15 +564,32 @@ static int vusb_udc_start(struct usb_gadget* gadget, struct usb_gadget_driver* d
   return 0;
 }
 
+static void vusb_port_stop(struct work_struct* work)
+{
+  struct vusb_port_dev* dev = container_of(work, struct vusb_port_dev, wk_stop);
+  struct vusb_ep* ep0 = &dev->ep[0];
+  struct vusb_udc* udc = ep0->udc;
+  //UDCVDBG(udc, "Port %d will be detached", ep->port);
+
+  u8 transfer[24];
+  // set disable on port
+  transfer[0] = PORT_REG_ENABLED; // reg
+  transfer[1] = ep0->port; // port: 2
+  transfer[2] = 0;			// value to set
+  vusb_write_buffer(udc, VUSB_REG_MAP_PORT_SET, transfer, sizeof(u8) * 3);
+
+  vusb_clear_mcu_pipe(dev);
+}
+
 static int vusb_udc_stop(struct usb_gadget* gadget)
 {
+  unsigned long flags;
   struct vusb_ep* ep0 = ep_usb_to_vusb_ep(gadget->ep0);
   struct vusb_udc* udc = ep0->udc;
-  struct vusb_port_dev* dev = &udc->ports[ep0->dev_idx].dev;
-  unsigned long flags;
+  struct vusb_port_dev* dev = ep0->dev;;
 
   /* clear all pending requests */
-  vusb_dev_nuke(dev, -ESHUTDOWN);
+  //vusb_dev_nuke(dev, -ESHUTDOWN);
 
   spin_lock_irqsave(&udc->lock, flags);
   udc->is_selfpowered = dev->gadget.is_selfpowered;
@@ -651,8 +655,8 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
 
     spin_lock_init(&ep->lock);
     INIT_LIST_HEAD(&ep->queue);
-    ep->dev_idx = devidx; // device idx on linux
     ep->udc = udc;
+    ep->dev = dev;
 // todo: temp....
     ep->port = devidx + 1; // port on the mcu
     ep->halted = 0;
@@ -663,7 +667,7 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     INIT_WORK(&ep->wk_irq_data, vusb_ep_irq_data);
     usb_ep_set_maxpacket_limit(&ep->ep_usb, VUSB_EP_MAX_PACKET_LIMIT);
     ep->maxpacket = ep->ep_usb.maxpacket;
-    //ep->idx = idx + 2; //  _PIPIRQ2	BIT(2), Pipe 2
+    ep->idx = 0; // unused 
     ep->ep0_dir = 0; // set while reading setup packet
 
     if (idx == 0) { /* For EP0 */
