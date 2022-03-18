@@ -255,6 +255,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < psz)
 			done = 1;
+		else
+		  vusb_spi_pipe_ack(udc, ep);
 	}
 
 	if (ep->dir == USB_DIR_IN) {
