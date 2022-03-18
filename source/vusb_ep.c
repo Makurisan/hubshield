@@ -152,15 +152,14 @@ static void vusb_ep_data(struct work_struct* work)
       while (vusb_do_data(ep->udc, ep));
     }
     else
-      if (ep->dir == USB_DIR_OUT) {
-        //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
-        // prep for the next read...
-      }
-      else
-        if (ep->dir == USB_DIR_IN) {
-          //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
-          while (vusb_do_data(ep->udc, ep));
-        }
+    if (ep->dir == USB_DIR_OUT) {
+      //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_OUT, name: %s, ep/idx: %d\n",   ep->name, ep->idx);
+    }
+    else
+    if (ep->dir == USB_DIR_IN) {
+      //UDCVDBG(ep->udc, "vusb_ep_data - USB_DIR_IN: %s, pipe: %d\n", ep->name, ep->idx);
+      while (vusb_do_data(ep->udc, ep));
+    }
     return;
   }
   UDCVDBG(ep->udc, "** WARNING vusb_ep_data - USB_DIR_IN, port:%d, ep/name: %s, pipe/id: %d\n", ep->port, ep->name, ep->idx);
@@ -254,6 +253,7 @@ static void vusb_ep_irq_data(struct work_struct* work)
     //pr_hex_mark_debug(transfer, cmd->length + VUSB_SPI_HEADER, PRINTF_READ, ep->name, "irq_data");
     // read one record from the mcu
     vusb_do_data(ep->udc, ep);
+    vusb_spi_pipe_ack(ep->udc, ep);
   }
 
 }
