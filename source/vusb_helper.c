@@ -35,32 +35,21 @@ void pr_hex_mark(const char* mem, int count, int mark, const char* label)
 
 void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, const char *debug)
 {
+  char headbyte[64];
   char hexbyte[64];
-  char headbyte[30];
   char hexline[512];
   int i, k;
 
-  u16 length = *(u16*)&mem[2];
   memset(hexbyte, 0, sizeof(hexbyte));
   memset(hexline, 0, sizeof(hexline));
-  count = count > 500?64:count;
+  count = count > 64?64:count;
 
   for (i = 0, k = 0; i < count /*&& count < sizeof(hexline)*/; i++)
   {
     if (i == 3) {
-      //  sprintf(hexbyte, "%02X] length: %d, count: %d", mem[i], (uint16_t)mem[2], count);
-      if (length)
-        snprintf(hexbyte, 64, "%02X] length: %04x/%d label: %s %s", mem[i], count, count, label?label:"", debug?debug: "");
-      else
-        sprintf(hexbyte, "%02X] ", mem[i]);
-      if (count > 4) {
-        snprintf(headbyte, 30, "\n   %02X %02X %02X %02X ", mem[0], mem[1], mem[2], mem[3]);
-        strcat(hexbyte, headbyte);
-      }
-      if (count < 4) {
-        snprintf(headbyte, 30, "\n   %02X ", mem[0]);
-        strcat(hexbyte, headbyte);
-      }
+      snprintf(hexbyte, 64, "%02X] length: %04x/%d label: %s %s", mem[i], count, count, label ? label : "", debug ? debug : "");
+      snprintf(headbyte, 30, "\n   %02X %02X %02X %02X ", mem[0], mem[1], mem[2], mem[3]);
+      strcat(hexbyte, headbyte);
     }
     else {
       if ((i + 1) % 8 == 0)
@@ -69,9 +58,8 @@ void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, 
         snprintf(hexbyte, 64, "%02X ", mem[i]);
     }
     strcat(hexline, hexbyte);
-
     // print line every 16 bytes or if this is the last for-loop
-    if (((i + 1) % 24 == 0) && ((i != 0) || (i + 1 == count))) {
+    if (((i + 1) % 32 == 0) && ((i != 0) || (i + 1 == count))) {
       k++;
       switch (mark) {
       case PRINTF_READ:
