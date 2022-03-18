@@ -59,7 +59,7 @@ void pr_hex_mark_debug(const char* mem, int count, int mark, const char *label, 
     }
     strcat(hexline, hexbyte);
     // print line every 16 bytes or if this is the last for-loop
-    if (((i + 1) % 32 == 0) && ((i != 0) || (i + 1 == count))) {
+    if ( ( (i + 1) % 32 == 0) || (i + 1 == count) ) {
       k++;
       switch (mark) {
       case PRINTF_READ:
