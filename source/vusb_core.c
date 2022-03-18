@@ -240,8 +240,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	} 
   if (ep->dir == USB_DIR_OUT) {
     u8 transfer[80];
-   //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
-    length = min(length, psz);
+	//	pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+		length = min(length, psz);
 
     // OUT data from the mcu...
     transfer[0] = REG_PIPE_FIFO; // write&read register
@@ -252,7 +252,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     //UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
 		prefetchw(buf);
 		memmove(buf, cmd->data, length);
-    //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < psz)
 			done = 1;
 	}
@@ -557,7 +557,8 @@ static int vusb_probe(struct spi_device *spi)
 	if (rc)
 		goto err;
 
-	udc->is_selfpowered = 1;
+	// for the pi shield
+	udc->is_selfpowered = 1; 
 	// driver is ready to use
 	udc->connected = true;
 

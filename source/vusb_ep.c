@@ -274,6 +274,15 @@ static void vusb_ep_status(struct work_struct* work)
     ep->todo &= ~ENABLE_EP;
     spin_unlock_irqrestore(&ep->lock, flags);
 
+    if (ep->ep_usb.desc->bEndpointAddress & 0x80) {
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-in", ep->idx);
+      ep->dir = USB_DIR_IN;
+    }
+    else {
+      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-out", ep->idx);
+      ep->dir = USB_DIR_OUT;
+    }
+
     //UDCVDBG(ep->udc, "vusb_ep_state enable name:%s, pipe: %x, maxp:%x, epaddr:%x\n",
     //  ep->name, ep->idx, ep->ep_usb.desc->wMaxPacketSize, ep->ep_usb.desc->bEndpointAddress);
 
@@ -313,7 +322,7 @@ static void vusb_ep_status(struct work_struct* work)
     transfer[2] = 1;			  // field to set
     vusb_write_buffer(ep->udc, VUSB_REG_MAP_PIPE_SET, transfer, sizeof(u8) * 3);
 
-    UDCVDBG(ep->udc, "vusb_ep_state enable request, name: %s, pipe/id: %d\n", ep->name, ep->idx);
+    UDCVDBG(ep->udc, "vusb_ep_state enable request, name: %s, pipe/id: %d, dir: %d\n", ep->name, ep->idx, ep->dir);
     // enable the pipe
     pipe = vusb_get_pipe(ep->udc, ep->idx);
     pipe->enabled = true;
@@ -688,7 +697,6 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
     ep->ep0_dir = 0; // set while reading setup packet
 
     if (idx == 0) { /* For EP0 */
- // ep->pipe = portnr - 1;
       ep->ep_usb.desc = &ep0_desc;
       ep->ep_usb.maxpacket = usb_endpoint_maxp(&ep0_desc);
       ep->maxpacket = ep->ep_usb.maxpacket;
@@ -699,20 +707,8 @@ int vusb_port_init(struct vusb_udc* udc, unsigned int devidx)
       ep->dir = USB_DIR_BOTH;
       continue;
     }
-
-    if (idx == 1) { /* EP1 is OUT */
-      ep->ep_usb.caps.dir_in = false;
-      ep->ep_usb.caps.dir_out = true;
-      ep->dir = USB_DIR_OUT;
-      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-out", idx);
-    }
-
-    if (idx > 1) { /* EP2 & EP3 are IN */
-      ep->ep_usb.caps.dir_in = true;
-      ep->ep_usb.caps.dir_out = false;
-      ep->dir = USB_DIR_IN;
-      snprintf(ep->name, VUSB_EPNAME_SIZE, "ep%d-in", idx);
-    }
+    ep->ep_usb.caps.dir_in = true;
+    ep->ep_usb.caps.dir_out = true;
     ep->ep_usb.caps.type_iso = false;
     ep->ep_usb.caps.type_int = true;
     ep->ep_usb.caps.type_bulk = true;
