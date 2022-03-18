@@ -15,7 +15,7 @@ sudo cp vhub-overlay.dtbo /boot/overlays
 sudo dtoverlay vhub-overlay.dtbo
 # start libcomposite
 sudo modprobe libcomposite
-# print the last 5 kernel prints
-dmesg  | tail -n 5
+# print the last 10 kernel prints
+dmesg  | tail -n 10
 # list the loaded overlays
 sudo dtoverlay -l
