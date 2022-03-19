@@ -226,7 +226,8 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
       memmove(buf, cmd->data, length); // mcu pipe index
       //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "Get - OUT");
 		}	else {
-      udc->spitransfer[0] = REG_PIPE_FIFO;
+			// IN setup packet
+			udc->spitransfer[0] = REG_PIPE_FIFO;
       udc->spitransfer[1] = req->ep->idx;
       prefetch(buf);
       memmove(&udc->spitransfer[2], buf, length); // mcu pipe index
@@ -241,8 +242,6 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
   if (ep->dir == USB_DIR_OUT) {
     u8 transfer[80];
 	//	pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
-		length = min(length, psz);
-
     // OUT data from the mcu...
     transfer[0] = REG_PIPE_FIFO; // write&read register
     transfer[1] = ep->idx; // pipe
@@ -252,7 +251,7 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
     //UDCVDBG(ep->udc, "vusb_do_data - EP-OUT, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
 		prefetchw(buf);
 		memmove(buf, cmd->data, length);
-    pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
+    //pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "EP-OUT");
 		if (length < psz)
 			done = 1;
 		else
@@ -260,13 +259,6 @@ int vusb_do_data(struct vusb_udc *udc, struct vusb_ep* ep)
 	}
 
 	if (ep->dir == USB_DIR_IN) {
-		//if (ep->eptype == REG_EP_BULK) {
-		//	UDCVDBG(ep->udc, "vusb_do_data - EP-BULK-IN, name: %s, ep/idx: %d, length: %d\n", ep->name, ep->idx, length);
-		//	pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-BULK-IN");
-		//}
-		//else
-		//  pr_hex_mark_debug(buf, length, PRINTF_READ, req->ep->name, "- EP-IN");
-		//}
     udc->spitransfer[0] = REG_PIPE_FIFO;
     udc->spitransfer[1] = req->ep->idx; // mcu pipe index
 		prefetch(buf);
