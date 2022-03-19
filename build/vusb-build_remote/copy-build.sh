@@ -11,11 +11,12 @@ sudo cp ./v-hub.ko /lib/modules/$(uname -r)/extras
 # load the kernel
 sudo modprobe v-hub
 # copy the overlay
-sudo cp vhub-overlay.dtbo /boot/overlays
 sudo dtoverlay vhub-overlay.dtbo
-# start libcomposite
-sudo modprobe libcomposite
 # print the last 10 kernel prints
 dmesg  | tail -n 10
 # list the loaded overlays
+# you can look: cd /sys/kernel/config/device-tree/overlays/
 sudo dtoverlay -l
+# list the gpio, for help raspi-gpio help
+ #raspi-gpio get 5,25
+
