@@ -20,3 +20,8 @@ sudo dtoverlay -l
 # list the gpio, for help raspi-gpio help
  #raspi-gpio get 5,25
 
+ # adding the gadget descriptors
+ # cdc serial
+ sudo ./gadget/cdc-acm.sh
+ # cdc ethernet
+ sudo ./gadget/cdc-ecm.sh up

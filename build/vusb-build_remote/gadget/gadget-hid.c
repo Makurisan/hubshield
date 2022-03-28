@@ -101,7 +101,7 @@ int initUSB() {
 
     struct usbg_gadget_strs g_strs = {
         .serial = "0123456789", /* Serial number */
-        .manufacturer = "Pimoroni", /* Manufacturer */
+        .manufacturer = "Gadget", /* Manufacturer */
         .product = "Keyboard" /* Product string */
     };
 
