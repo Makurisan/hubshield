@@ -10,7 +10,7 @@ echo "0x0001" > idProduct
 
 mkdir strings/0x409
 echo "0123456789" > strings/0x409/serialnumber
-echo "Magic Manufacturing" > strings/0x409/manufacturer
+echo "Virtual Hub" > strings/0x409/manufacturer
 echo "Serial Gadget" > strings/0x409/product
 
 mkdir configs/c.1
